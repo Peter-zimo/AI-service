@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI客服管理后台</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f3f4f6; color: #374151; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ===== 布局 ===== */
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: #fff; border-right: 1px solid #e5e7eb; position: fixed; top: 0; left: 0; height: 100vh; display: flex; flex-direction: column; z-index: 100; }
+    .main { margin-left: 220px; min-height: 100vh; padding: 24px; }
+
+    /* ===== 侧边栏 ===== */
+    .logo { padding: 18px 16px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 36px; height: 36px; background: #eff6ff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .logo-text { font-weight: 600; font-size: 14px; color: #111827; }
+    .logo-sub { font-size: 11px; color: #9ca3af; }
+    nav { padding: 12px 8px; flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #6b7280; width: 100%; text-align: left; border: none; background: none; transition: all 0.15s; }
+    .nav-item:hover { background: #f9fafb; color: #374151; }
+    .nav-item.active { background: #eff6ff; color: #2563eb; font-weight: 500; }
+    .sidebar-footer { padding: 12px 16px; border-top: 1px solid #f3f4f6; font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between; align-items: center; }
+
+    /* ===== 连接状态 ===== */
+    .conn-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+    .conn-ok { background: #dcfce7; color: #16a34a; }
+    .conn-err { background: #fee2e2; color: #dc2626; }
+    .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* ===== Tab内容 ===== */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .page-title { font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 20px; }
+
+    /* ===== 卡片 ===== */
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 20px; }
+    .card-title { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 16px; }
+
+    /* ===== 统计卡片 ===== */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 20px 24px; }
+    .stat-label { font-size: 12px; color: #9ca3af; margin-bottom: 8px; }
+    .stat-value { font-size: 32px; font-weight: 700; }
+    .stat-blue { color: #2563eb; }
+    .stat-green { color: #16a34a; }
+    .stat-purple { color: #7c3aed; }
+    .stat-amber { color: #d97706; }
+
+    /* ===== 图表 ===== */
+    .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding: 0 4px; }
+    .bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+    .bar { width: 100%; background: #bfdbfe; border-radius: 4px 4px 0 0; min-height: 4px; transition: background 0.2s; cursor: pointer; }
+    .bar:hover { background: #2563eb; }
+    .bar-label { font-size: 11px; color: #9ca3af; flex-shrink: 0; }
+
+    /* ===== 按钮 ===== */
+    .btn { border: none; border-radius: 8px; padding: 8px 18px; font-size: 14px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .btn-danger { background: none; color: #ef4444; border: none; font-size: 13px; cursor: pointer; padding: 2px 6px; font-family: inherit; }
+    .btn-danger:hover { color: #dc2626; }
+    .btn-link { background: none; color: #2563eb; border: none; font-size: 13px; cursor: pointer; padding: 2px 6px; font-family: inherit; }
+    .btn-link:hover { text-decoration: underline; }
+
+    /* ===== 输入框 ===== */
+    .input { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 9px 14px; font-size: 14px; outline: none; font-family: inherit; transition: border 0.15s; background: #fff; }
+    .input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; color: #6b7280; margin-bottom: 6px; font-weight: 500; }
+
+    /* ===== 表格 ===== */
+    .table-wrap { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f9fafb; text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid #f3f4f6; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+
+    /* ===== Badge ===== */
+    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .badge-green { background: #dcfce7; color: #16a34a; }
+    .badge-gray { background: #f3f4f6; color: #6b7280; }
+    .badge-blue { background: #dbeafe; color: #2563eb; font-size: 11px; margin: 2px; }
+
+    /* ===== 加载/空状态 ===== */
+    .empty { text-align: center; padding: 48px 0; color: #9ca3af; font-size: 14px; }
+    .loading { text-align: center; padding: 48px 0; color: #9ca3af; font-size: 14px; }
+    .loading::after { content: ''; display: inline-block; width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== 错误横幅 ===== */
+    .err-banner { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; font-size: 14px; color: #dc2626; display: none; align-items: center; gap: 10px; }
+    .err-banner.show { display: flex; }
+    .err-banner button { margin-left: auto; background: #dc2626; color: #fff; border: none; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+
+    /* ===== 弹窗 ===== */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal.hidden { display: none; }
+    .modal-box { background: #fff; border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+    .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #111827; }
+    .modal-footer { display: flex; gap: 12px; margin-top: 20px; }
+    .conv-detail { background: #f8fafc; border-radius: 10px; padding: 16px; max-height: 50vh; overflow-y: auto; }
+    .conv-msg { margin-bottom: 12px; }
+    .conv-msg .role { font-size: 11px; color: #9ca3af; margin-bottom: 3px; }
+    .conv-msg .bubble { display: inline-block; padding: 8px 14px; border-radius: 10px; font-size: 13px; max-width: 80%; white-space: pre-wrap; word-break: break-all; }
+    .conv-msg.user .bubble { background: #2563eb; color: #fff; }
+    .conv-msg.assistant .bubble { background: #fff; border: 1px solid #e5e7eb; }
+
+    /* ===== Toast ===== */
+    .toast { position: fixed; top: 20px; right: 20px; z-index: 2000; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: toastIn 0.3s ease; display: none; }
+    .toast-success { background: #16a34a; }
+    .toast-error { background: #dc2626; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ===== 响应式 ===== */
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- 侧边栏 -->
+  <div class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">🤖</div>
+      <div>
+        <div class="logo-text">AI客服后台</div>
+        <div class="logo-sub">管理系统 v1.1</div>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard')">📊 数据概览</button>
+      <button class="nav-item" id="nav-stats-link" onclick="statsGo()">📈 统计面板</button>
+      <button class="nav-item" id="nav-conversations" onclick="switchTab('conversations')">💬 对话记录</button>
+      <button class="nav-item" id="nav-knowledge" onclick="switchTab('knowledge')">📚 知识库管理</button>
+      <button class="nav-item" id="nav-brand" onclick="switchTab('brand')">🎨 品牌设置</button>
+      <button class="nav-item" id="nav-sensitive" onclick="switchTab('sensitive')">🚫 敏感词管理</button>
+      <button class="nav-item" id="nav-settings" onclick="switchTab('settings')">⚙️ 系统设置</button>
+    </nav>
+    <div class="sidebar-footer">
+      <span id="conn-status" class="conn-badge conn-err"><span class="conn-dot"></span>检测中...</span>
+      <a href="/" target="_blank">访客端 ↗</a>
+    </div>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main">
+
+    <!-- 错误横幅 -->
+    <div class="err-banner" id="err-banner">
+      <span>⚠️</span>
+      <span id="err-msg">无法连接到服务器，请确认 Node 服务是否启动</span>
+      <button onclick="retryConnect()">重试</button>
+    </div>
+
+    <!-- ===== 数据概览 ===== -->
+    <div id="tab-dashboard" class="tab-content active">
+      <div class="page-title">数据概览</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">今日对话</div><div id="stat-convs" class="stat-value stat-blue">—</div></div>
+        <div class="stat-card"><div class="stat-label">今日消息</div><div id="stat-msgs" class="stat-value stat-green">—</div></div>
+        <div class="stat-card"><div class="stat-label">AI解答率</div><div id="stat-ai" class="stat-value stat-purple">—</div></div>
+        <div class="stat-card"><div class="stat-label">平均满意度</div><div id="stat-sat" class="stat-value stat-amber">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">本周对话趋势</div>
+        <div class="bar-chart" id="week-chart"><div class="loading" style="width:100%;align-self:center;"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">知识库概况</div>
+        <div id="kb-summary" style="font-size:14px;color:#6b7280;">加载中...</div>
+      </div>
+    </div>
+
+    <!-- ===== 对话记录 ===== -->
+    <div id="tab-conversations" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="page-title" style="margin:0">对话记录</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="loadConversations()">🔄 刷新</button>
+          <button class="btn btn-secondary" onclick="window.open('/api/chat/export/xlsx','_blank')" style="font-size:13px;">📊 Excel</button>
+          <button class="btn btn-secondary" onclick="window.open('/api/chat/export/csv','_blank')" style="font-size:13px;">📄 CSV</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>访客</th><th>最后消息</th><th>时间</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody id="conv-tbody"><tr><td colspan="5" class="loading">加载中</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 知识库管理 ===== -->
+    <div id="tab-knowledge" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="page-title" style="margin:0">知识库管理</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="openImportModal()" style="font-size:13px;">📥 导入</button>
+          <button class="btn btn-secondary" onclick="window.open('/api/knowledge/export/xlsx','_blank')" style="font-size:13px;">📤 Excel导出</button>
+          <button class="btn btn-secondary" onclick="window.open('/api/knowledge/export/csv','_blank')" style="font-size:13px;">📄 CSV导出</button>
+          <button class="btn btn-primary" onclick="openAddModal()">＋ 添加问答</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;padding:16px 20px;">
+        <input type="text" id="search-input" class="input" placeholder="🔍 搜索问题关键词..." oninput="handleSearch(this.value)" style="max-width:400px;">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:38%">问题</th><th style="width:35%">答案预览</th><th style="width:17%">关键词</th><th style="width:10%">操作</th></tr></thead>
+          <tbody id="kb-tbody"><tr><td colspan="4" class="loading">加载中</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== 敏感词管理 ===== -->
+    <div id="tab-sensitive" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="page-title" style="margin:0">🚫 敏感词管理</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="window.open('/api/sensitive/export/xlsx','_blank')" style="font-size:13px;">📤 Excel导出</button>
+          <button class="btn btn-secondary" onclick="window.open('/api/sensitive/export/csv','_blank')" style="font-size:13px;">📄 CSV导出</button>
+          <button class="btn btn-primary" onclick="openSensitiveModal()">＋ 添加敏感词</button>
+        </div>
+      </div>
+      
+      <!-- 统计卡片 -->
+      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-label">敏感词总数</div><div id="sw-total" class="stat-value stat-blue">—</div></div>
+        <div class="stat-card"><div class="stat-label">分类数量</div><div id="sw-categories" class="stat-value stat-green">—</div></div>
+        <div class="stat-card"><div class="stat-label">检测次数</div><div id="sw-detections" class="stat-value stat-purple">—</div></div>
+        <div class="stat-card"><div class="stat-label">今日命中</div><div id="sw-hits" class="stat-value stat-amber">—</div></div>
+      </div>
+      
+      <!-- 筛选和搜索 -->
+      <div class="card" style="margin-bottom:16px;padding:16px 20px;">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <select id="sw-category-filter" class="input" style="max-width:180px;" onchange="filterSensitiveWords()">
+            <option value="">全部分类</option>
+            <option value="politics">政治敏感</option>
+            <option value="porn">色情低俗</option>
+            <option value="violence">暴力恐怖</option>
+            <option value="ads">广告推广</option>
+            <option value="custom">自定义</option>
+          </select>
+          <input type="text" id="sw-search" class="input" placeholder="🔍 搜索敏感词..." oninput="filterSensitiveWords()" style="max-width:300px;">
+          <button class="btn btn-secondary" onclick="clearSensitiveFilter()" style="font-size:12px;">重置</button>
+        </div>
+      </div>
+      
+      <!-- 敏感词列表 -->
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:15%">分类</th><th style="width:40%">敏感词</th><th style="width:25%">添加时间</th><th style="width:20%">操作</th></tr></thead>
+          <tbody id="sw-tbody"><tr><td colspan="4" class="loading">加载中</td></tr></tbody>
+        </table>
+      </div>
+      
+      <!-- 检测测试 -->
+      <div class="card" style="margin-top:20px;">
+        <div class="card-title">🔬 检测测试</div>
+        <div style="display:flex;gap:12px;align-items:flex-start;">
+          <input type="text" id="sw-test-input" class="input" placeholder="输入文本测试是否包含敏感词..." style="flex:1;">
+          <button class="btn btn-primary" onclick="testSensitiveDetect()">检测</button>
+        </div>
+        <div id="sw-test-result" style="margin-top:12px;font-size:14px;display:none;"></div>
+      </div>
+    </div>
+
+    <!-- ===== 系统设置 ===== -->
+    <div id="tab-brand" class="tab-content">
+      <div class="page-title">🎨 品牌设置</div>
+      <div class="err-banner" id="brand-err"><span id="brand-err-msg"></span><button onclick="this.parentElement.classList.remove('show')">×</button></div>
+      
+      <div class="card">
+        <div class="card-title">基本信息</div>
+        <div class="form-group">
+          <label class="form-label">品牌名称</label>
+          <input class="input" id="brand-name-input" placeholder="如：XX自行车官方客服" value="">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Logo 图标（Emoji）</label>
+          <input class="input" id="brand-logo-input" placeholder="如：🚲 🛵 🍜 🏪" style="font-size:20px;" value="">
+        </div>
+        <div class="form-group">
+          <label class="form-label">客服昵称</label>
+          <input class="input" id="brand-botname-input" placeholder="如：小智、小美、客服小王" value="">
+        </div>
+        <div class="form-group">
+          <label class="form-label">描述文字</label>
+          <input class="input" id="brand-desc-input" placeholder="显示在头部的副标题" value="">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">主题颜色</div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label class="form-label">主色调</label>
+            <input type="color" id="brand-color-input" value="#2563eb" style="width:100%; height:40px; border:none; border-radius:8px; cursor:pointer;">
+          </div>
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label class="form-label">渐变起始色</label>
+            <input type="color" id="brand-grad-start-input" value="#2563eb" style="width:100%; height:40px; border:none; border-radius:8px; cursor:pointer;">
+          </div>
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label class="form-label">渐变结束色</label>
+            <input type="color" id="brand-grad-end-input" value="#1d4ed8" style="width:100%; height:40px; border:none; border-radius:8px; cursor:pointer;">
+          </div>
+        </div>
+        <!-- 预览 -->
+        <div id="brand-preview" style="margin-top:16px; padding:14px 18px; border-radius:10px; color:#fff; font-size:15px; font-weight:600; display:flex; align-items:center; gap:12px; background:linear-gradient(135deg, #2563eb, #1d4ed8);">
+          <span id="preview-logo" style="font-size:24px;">🤖</span>
+          <span id="preview-name">AI智能客服</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">欢迎消息</div>
+        <div class="form-group">
+          <label class="form-label">访客首次进入时看到的欢迎语</label>
+          <textarea class="input" id="brand-welcome-input" rows="3" placeholder='支持变量：{botName}=客服昵称，{name}=品牌名称&#10;默认：您好！我是{botName}，很高兴为您服务。'></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">快捷问题（最多6个）</div>
+        <div id="quick-q-list"></div>
+        <button class="btn btn-secondary" onclick="addQuickQ()" style="margin-top:10px;">+ 添加快捷问题</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">其他文案</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="form-group">
+            <label class="form-label">输入框提示文字</label>
+            <input class="input" id="brand-placeholder-input" placeholder="输入您的问题..." value="">
+          </div>
+          <div class="form-group">
+            <label class="form-label">底部提示</label>
+            <input class="input" id="brand-footer-input" placeholder="Enter 发送 · Shift+Enter 换行" value="">
+          </div>
+          <div class="form-group">
+            <label class="form-label">评价标题</label>
+            <input class="input" id="brand-rating-title-input" placeholder="本次服务评价" value="">
+          </div>
+          <div class="form-group">
+            <label class="form-label">评价副标题</label>
+            <input class="input" id="brand-rating-subtitle-input" placeholder="您的反馈帮助我们持续改进" value="">
+          </div>
+          <div class="form-group">
+            <label class="form-label">客服热线（可选）</label>
+            <input class="input" id="brand-hotline-input" placeholder="400-XXX-XXXX" value="">
+          </div>
+          <div class="form-group">
+            <label class="form-label">版权信息（可选）</label>
+            <input class="input" id="brand-copyright-input" placeholder="© 2024 XXX公司" value="">
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-bottom:30px;">
+        <button class="btn btn-primary" onclick="saveBrandConfig()" style="flex:1; padding:12px; font-size:15px;">💾 保存品牌配置</button>
+        <button class="btn btn-secondary" onclick="resetBrandConfig()">↩️ 重置默认</button>
+      </div>
+    </div>
+
+    <div id="tab-settings" class="tab-content">
+      <div class="page-title">系统设置</div>
+      <div class="card">
+        <div class="card-title">基本配置</div>
+        <div class="form-group">
+          <label class="form-label">公司 / 品牌名称</label>
+          <input type="text" id="cfg-company" class="input" value="我的公司">
+        </div>
+        <div class="form-group">
+          <label class="form-label">AI客服昵称</label>
+          <input type="text" id="cfg-name" class="input" value="小智">
+        </div>
+        <div class="form-group">
+          <label class="form-label">欢迎语</label>
+          <textarea id="cfg-welcome" class="input" rows="2" style="resize:none;">您好！我是AI智能客服，很高兴为您服务。</textarea>
+        </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #f3f4f6;">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>AI大模型配置</span>
+            <span id="ai-status-badge" class="badge badge-gray">未配置</span>
+          </div>
+          
+          <!-- 智谱AI配置 -->
+          <div class="form-group" style="margin-top:12px;padding:12px;background:#f9fafb;border-radius:8px;">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="selectAIProvider('zhipu')">
+              <input type="radio" name="ai-provider" id="cfg-zhipu-enabled" value="zhipu" onchange="onProviderChange('zhipu')">
+              <span>启用智谱AI</span>
+              <span id="zhipu-connected-badge" class="badge badge-green" style="display:none;margin-left:auto;">✓ 已连接</span>
+            </label>
+            <input type="password" id="cfg-zhipu-apikey" class="input" placeholder="智谱GLM API Key" style="margin-top:8px;">
+            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">申请地址：<a href="https://open.bigmodel.cn" target="_blank">open.bigmodel.cn</a></div>
+            <select id="cfg-zhipu-model" class="input" style="margin-top:8px;">
+              <option value="glm-4-flash">GLM-4-Flash（免费）</option>
+              <option value="glm-4">GLM-4（付费，更强）</option>
+              <option value="glm-4-air">GLM-4-Air（付费，平衡）</option>
+            </select>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button class="btn btn-primary" onclick="saveZhipuConfig()" style="flex:1;font-size:12px;padding:6px 12px;">💾 保存</button>
+              <button class="btn btn-secondary" id="zhipu-test-btn" onclick="testAIProvider('zhipu')" style="flex:1;font-size:12px;padding:6px 12px;display:none;">🧪 测试连接</button>
+            </div>
+            <div id="zhipu-test-result" style="margin-top:8px;font-size:12px;display:none;"></div>
+          </div>
+          
+          <!-- DeepSeek配置 -->
+          <div class="form-group" style="margin-top:12px;padding:12px;background:#f9fafb;border-radius:8px;">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="selectAIProvider('deepseek')">
+              <input type="radio" name="ai-provider" id="cfg-deepseek-enabled" value="deepseek" onchange="onProviderChange('deepseek')">
+              <span>启用DeepSeek</span>
+              <span id="deepseek-connected-badge" class="badge badge-green" style="display:none;margin-left:auto;">✓ 已连接</span>
+            </label>
+            <input type="password" id="cfg-deepseek-apikey" class="input" placeholder="DeepSeek API Key" style="margin-top:8px;">
+            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">申请地址：<a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a></div>
+            <select id="cfg-deepseek-model" class="input" style="margin-top:8px;">
+              <option value="deepseek-chat">DeepSeek-V3（推荐）</option>
+              <option value="deepseek-reasoner">DeepSeek-R1（推理）</option>
+            </select>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button class="btn btn-primary" onclick="saveDeepseekConfig()" style="flex:1;font-size:12px;padding:6px 12px;">💾 保存</button>
+              <button class="btn btn-secondary" id="deepseek-test-btn" onclick="testAIProvider('deepseek')" style="flex:1;font-size:12px;padding:6px 12px;display:none;">🧪 测试连接</button>
+            </div>
+            <div id="deepseek-test-result" style="margin-top:8px;font-size:12px;display:none;"></div>
+          </div>
+          
+          <!-- 默认提供商 -->
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">默认使用</label>
+            <select id="cfg-default-provider" class="input" onchange="saveDefaultProvider()">
+              <option value="zhipu">智谱AI（优先）</option>
+              <option value="deepseek">DeepSeek（优先）</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f3f4f6;">
+          <button class="btn btn-primary" onclick="saveSettings()">保存基本设置</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">服务状态</div>
+        <div id="srv-status" style="font-size:14px;color:#6b7280;">检测中...</div>
+        <button class="btn btn-secondary" onclick="checkHealth(true)" style="margin-top:12px;">重新检测</button>
+      </div>
+
+      <!-- 修改管理密码 -->
+      <div class="card">
+        <div class="card-title">🔐 修改管理密码</div>
+        <div class="form-group">
+          <label class="form-label">用户名</label>
+          <input type="text" id="pwd-username" class="input" placeholder="admin 或 agent">
+        </div>
+        <div class="form-group">
+          <label class="form-label">旧密码</label>
+          <input type="password" id="pwd-old" class="input" placeholder="当前密码">
+        </div>
+        <div class="form-group">
+          <label class="form-label">新密码（至少6位）</label>
+          <input type="password" id="pwd-new" class="input" placeholder="新密码">
+        </div>
+        <div class="form-group">
+          <label class="form-label">确认新密码</label>
+          <input type="password" id="pwd-confirm" class="input" placeholder="再次输入新密码">
+        </div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary" onclick="changeAdminPassword()">确认修改</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- 知识库弹窗 -->
+<div id="kb-modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-title" id="kb-modal-title">添加问答</div>
+    <input type="hidden" id="edit-id">
+    <div class="form-group">
+      <label class="form-label">问题 <span style="color:#ef4444">*</span></label>
+      <input type="text" id="input-question" class="input" placeholder="如：你们的工作时间是几点？">
+    </div>
+    <div class="form-group">
+      <label class="form-label">答案 <span style="color:#ef4444">*</span></label>
+      <textarea id="input-answer" class="input" rows="5" style="resize:vertical;" placeholder="请输入标准回答..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">关键词（逗号分隔，不填则自动提取）</label>
+      <input type="text" id="input-keywords" class="input" placeholder="如：工作时间,上班时间,营业时间">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('kb-modal')" style="flex:1;">取消</button>
+      <button class="btn btn-primary" onclick="saveKnowledge()" style="flex:2;">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 对话详情弹窗 -->
+<div id="conv-modal" class="modal hidden">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-title">对话详情</div>
+    <div id="conv-detail" class="conv-detail"></div>
+    <div class="modal-footer" style="justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeModal('conv-modal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加敏感词弹窗 -->
+<div id="sw-modal" class="modal hidden">
+  <div class="modal-box" style="max-width:450px;">
+    <div class="modal-title">添加敏感词</div>
+    <input type="hidden" id="sw-edit-id">
+    <div class="form-group">
+      <label class="form-label">分类 <span style="color:#ef4444">*</span></label>
+      <select id="sw-input-category" class="input">
+        <option value="politics">政治敏感</option>
+        <option value="porn">色情低俗</option>
+        <option value="violence">暴力恐怖</option>
+        <option value="ads">广告推广</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">敏感词 <span style="color:#ef4444">*</span></label>
+      <input type="text" id="sw-input-word" class="input" placeholder="输入敏感词，多个用逗号分隔">
+      <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持同时添加多个词，用逗号分隔</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sw-modal')" style="flex:1;">取消</button>
+      <button class="btn btn-primary" onclick="saveSensitiveWord()" style="flex:2;">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<!-- ========== 批量导入模态框 ========== -->
+<div id="import-modal" class="modal hidden">
+  <div class="modal-box" style="max-width:700px;max-height:85vh;display:flex;flex-direction:column;">
+    <div class="modal-title">📥 批量导入知识库</div>
+
+    <!-- Step 1: 下载模板 -->
+    <div id="import-step1">
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:20px;margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:600;color:#0369a1;margin-bottom:10px;">📌 导入说明</div>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:#0369a1;line-height:2;">
+          <li>支持 <strong>.csv</strong> 和 <strong>.xlsx</strong> 文件</li>
+          <li>文件需包含「<strong>问题</strong>」和「<strong>答案</strong>」两列（关键词列可选）</li>
+          <li>关键词用逗号分隔，如：<code>时间,上班,营业</code></li>
+          <li>重复问题会自动跳过</li>
+        </ul>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <a href="/knowledge_template.xlsx" download class="btn btn-secondary" style="flex:1;text-align:center;text-decoration:none;">📊 下载 Excel 模板</a>
+        <a href="/knowledge_template.csv" download class="btn btn-secondary" style="flex:1;text-align:center;text-decoration:none;">📄 下载 CSV 模板</a>
+      </div>
+      <div style="border:2px dashed #e5e7eb;border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff'" ondragleave="this.style.borderColor='#e5e7eb';this.style.background='transparent'" ondrop="handleImportDrop(event)">
+        <div style="font-size:28px;margin-bottom:8px;">📁</div>
+        <div style="font-size:14px;color:#374151;font-weight:500;">点击上传文件，或拖拽文件到这里</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .xlsx，单文件不超过 2MB</div>
+        <input type="file" id="import-file-input" accept=".csv,.xlsx,text/csv,application/vnd.ms-excel" style="display:none;" onchange="handleImportFile(this.files[0])">
+      </div>
+    </div>
+
+    <!-- Step 2: 预览 + 确认 -->
+    <div id="import-step2" style="display:none;flex:1;overflow:hidden;display:none;flex-direction:column;">
+      <div style="margin-bottom:12px;">
+        <div id="import-summary" style="display:flex;gap:16px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="import-preview-wrap" style="flex:1;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;max-height:340px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead style="position:sticky;top:0;background:#f9fafb;z-index:1;">
+            <tr>
+              <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#374151;width:32%;">问题</th>
+              <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#374151;width:38%;">答案预览</th>
+              <th style="text-align:left;padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#374151;width:18%;">关键词</th>
+              <th style="text-align:center;padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#374151;width:12%;">状态</th>
+            </tr>
+          </thead>
+          <tbody id="import-preview-body"></tbody>
+        </table>
+      </div>
+      <div id="import-error-summary" style="margin-top:10px;display:none;"></div>
+    </div>
+
+    <!-- Step 3: 导入结果 -->
+    <div id="import-step3" style="display:none;text-align:center;padding:20px;">
+      <div id="import-result-icon" style="font-size:48px;margin-bottom:12px;"></div>
+      <div id="import-result-msg" style="font-size:16px;font-weight:600;margin-bottom:8px;"></div>
+      <div id="import-result-detail" style="font-size:13px;color:#6b7280;"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="import-btn-cancel" onclick="closeImportModal()" style="flex:1;">取消</button>
+      <button class="btn btn-primary" id="import-btn-confirm" onclick="confirmImport()" disabled style="flex:2;opacity:0.5;">确 认 导 入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 登录弹窗 -->
+<div id="login-modal" class="modal" style="display:none;">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-title" style="text-align:center;">🔐 AI客服管理后台</div>
+    <div style="text-align:center;color:#6b7280;font-size:13px;margin-bottom:20px;">请输入管理员账号密码</div>
+    <div class="form-group">
+      <label class="form-label">用户名</label>
+      <input type="text" id="login-username" class="input" placeholder="admin" value="admin">
+    </div>
+    <div class="form-group">
+      <label class="form-label">密码</label>
+      <input type="password" id="login-password" class="input" placeholder="请输入密码" value="" autocomplete="current-password">
+    </div>
+    <div id="login-error" style="color:#dc2626;font-size:13px;margin-bottom:12px;display:none;text-align:center;"></div>
+    <button class="btn btn-primary" onclick="doLogin()" style="width:100%;padding:12px;">登录</button>
+
+  </div>
+</div>
+
+<script>
+// 认证状态
+let authHeader = localStorage.getItem('authHeader') || '';
+let currentUser = localStorage.getItem('currentUser') || '';
+
+// API 地址：生产环境优先用 VITE_API_URL，否则自动检测当前 host（加上 /api 前缀）
+const API = ((window.__ENV__ && window.__ENV__.VITE_API_URL) || window.location.origin) + '/api';
+let knowledgeCache = [];
+let healthOk = false;
+let isLoggedIn = !!authHeader;
+
+/* ===== 登录 ===== */
+function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorEl = document.getElementById('login-error');
+
+  if (!username || !password) {
+    errorEl.textContent = '请输入用户名和密码';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  authHeader = 'Basic ' + btoa(username + ':' + password);
+  localStorage.setItem('authHeader', authHeader);
+  localStorage.setItem('currentUser', username);
+  currentUser = username;
+
+  // 验证登录：先用 /health 测通连接，再调 /api/stats/satisfaction 验证密码
+  fetchWithTimeout(API + '/health', {}, 3000).then(res => {
+    if (!res.ok) throw new Error('服务不可用');
+    // 连接通了，验证密码（API 已含 /api 前缀，此处不再重复）
+    return fetchWithTimeout(API + '/stats/satisfaction', {
+      headers: { 'Authorization': authHeader }
+    }, 5000);
+  }).then(res => {
+    if (!res.ok) throw new Error('密码错误');
+    return res.json();
+  }).then(data => {
+    if (!data.success) throw new Error('密码错误');
+    isLoggedIn = true;
+    healthOk = true; // 登录刚验证过，标记服务为可用
+    document.getElementById('login-modal').style.display = 'none';
+    initApp();
+  }).catch(e => {
+    let msg = '用户名或密码错误';
+    if (e.message === '服务不可用') msg = '无法连接服务器，请确认服务已启动';
+    if (e.message === '密码错误') msg = '用户名或密码错误';
+    errorEl.textContent = msg;
+    errorEl.style.display = 'block';
+    authHeader = '';
+    localStorage.removeItem('authHeader');
+    localStorage.removeItem('currentUser');
+  });
+}
+
+// 回车登录
+document.getElementById('login-password').addEventListener('keypress', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+/* ===== 登出 ===== */
+function logout() {
+  if (!confirm('确定要退出登录吗？')) return;
+  authHeader = '';
+  currentUser = '';
+  localStorage.removeItem('authHeader');
+  localStorage.removeItem('currentUser');
+  location.reload();
+}
+
+/* ===== 工具函数 ===== */
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function escAttr(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+const _isDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+function log(...args) { if (_isDev) console.log(...args); }
+function logErr(...args) { if (_isDev) console.error(...args); }
+function fmtTime(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch(e) { return iso; }
+}
+
+/* ===== Toast ===== */
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast toast-' + type;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 2800);
+}
+
+/* ===== 弹窗 ===== */
+function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+document.querySelectorAll('.modal').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.add('hidden'); });
+});
+
+/* ===== Tab切换 ===== */
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'dashboard') loadStats();
+  if (name === 'conversations') loadConversations();
+  if (name === 'knowledge') loadKnowledge();
+  if (name === 'brand') loadBrandConfig();
+  if (name === 'sensitive') loadSensitiveWords();
+}
+
+/* ===== 跳转统计面板（同页面导航，避免弹窗拦截）===== */
+function statsGo() {
+  // file:// 打开时需要 fallback，正常浏览器访问走 origin
+  const base = (window.location.protocol === 'file:')
+    ? (window.__ENV__ && window.__ENV__.VITE_API_URL ? window.__ENV__.VITE_API_URL.replace(/\/api$/, '') : 'http://localhost:3456')
+    : window.location.origin;
+  window.location.href = base + '/stats.html';
+}
+
+/* ===== 健康检查 ===== */
+async function checkHealth(showDetail = false) {
+  const badge = document.getElementById('conn-status');
+  const banner = document.getElementById('err-banner');
+  const srvStatus = document.getElementById('srv-status');
+  try {
+    // 健康检查不需要认证
+    const res = await fetchWithTimeout(API + '/health', {}, 4000);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    healthOk = true;
+    badge.className = 'conn-badge conn-ok';
+    badge.innerHTML = '<span class="conn-dot"></span>已连接';
+    banner.classList.remove('show');
+    if (srvStatus) srvStatus.innerHTML = `<span style="color:#16a34a">✅ 服务正常运行</span>，最后检测：${new Date().toLocaleTimeString('zh-CN')}`;
+  } catch(e) {
+    healthOk = false;
+    badge.className = 'conn-badge conn-err';
+    badge.innerHTML = '<span class="conn-dot"></span>未连接';
+    banner.classList.add('show');
+    document.getElementById('err-msg').textContent = '无法连接到服务器（' + e.message + '），请确认 Node 服务已启动：node server/index.js';
+    if (srvStatus) srvStatus.innerHTML = `<span style="color:#dc2626">❌ 服务未响应</span>，请在命令行运行：<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">node server/index.js</code>`;
+    if (showDetail) toast('连接失败：' + e.message, 'error');
+  }
+}
+
+function retryConnect() {
+  checkHealth(true);
+  setTimeout(() => { if (healthOk) loadStats(); }, 500);
+}
+
+/* ===== 带超时的 fetch ===== */
+function fetchWithTimeout(url, options = {}, ms = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
+async function apiFetch(url, options = {}, timeout) {
+  const headers = { ...(options.headers || {}) };
+  if (authHeader) {
+    headers['Authorization'] = authHeader;
+  }
+  let res;
+  try {
+    res = await fetchWithTimeout(url, { ...options, headers }, timeout || options.timeout || 8000);
+  } catch(e) {
+    // fetch 网络错误（服务未启动、超时等）
+    if (!healthOk) showLoginForm();
+    throw new Error('服务未连接，请确认服务已启动');
+  }
+  if (res.status === 401) {
+    showLoginForm();
+    throw new Error('登录已过期，请重新登录');
+  }
+  return res;
+}
+
+/* ===== 显示登录框 ===== */
+function showLoginForm() {
+  document.getElementById('login-modal').style.display = 'flex';
+}
+
+/* ===== 数据概览 ===== */
+async function loadStats() {
+  try {
+    const res = await apiFetch(API + '/stats/overview');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error);
+    const d = result.data;
+
+    document.getElementById('stat-convs').textContent = d.today ? d.today.conversations : (d.totalConversations ?? 0);
+    document.getElementById('stat-msgs').textContent = d.today ? d.today.messages : (d.totalMessages ?? 0);
+    document.getElementById('stat-ai').textContent = (d.aiHandlingRate ?? 0) + '%';
+    const sat = d.avgSatisfaction;
+    document.getElementById('stat-sat').textContent = (sat && sat > 0) ? sat + ' ⭐' : '暂无';
+
+    // 本周柱状图：直接查 trend 接口
+    renderWeekChartFromTrend();
+
+    loadKbSummary();
+  } catch(e) {
+    document.getElementById('stat-convs').textContent = '—';
+    document.getElementById('stat-msgs').textContent = '—';
+    document.getElementById('stat-ai').textContent = '—';
+    document.getElementById('stat-sat').textContent = '—';
+    document.getElementById('week-chart').innerHTML = '<div class="empty" style="width:100%;align-self:center;">加载失败：' + esc(e.message) + '</div>';
+  }
+}
+
+// 从 trend 接口渲染本周柱状图
+function renderWeekChartFromTrend() {
+  const el = document.getElementById('week-chart');
+  apiFetch(API + '/stats/trend?days=7').then(res => res.json()).then(result => {
+    if (!result.success || !result.data || result.data.length === 0) {
+      el.innerHTML = '<div class="empty" style="width:100%;align-self:center;">本周暂无数据</div>';
+      return;
+    }
+    const max = Math.max(...result.data.map(d => d.conversations || 0), 1);
+    el.innerHTML = result.data.map(d => {
+      const cnt = d.conversations || 0;
+      const h = Math.max(Math.round((cnt / max) * 140), 4);
+      const label = d.date ? d.date.slice(5) : '';
+      const weekday = d.weekday || '';
+      return `<div class="bar-item">
+        <div class="bar" style="height:${h}px" title="${d.date} ${weekday}：${cnt} 次对话"></div>
+        <div class="bar-label">${esc(label)}</div>
+      </div>`;
+    }).join('');
+  }).catch(() => {
+    el.innerHTML = '<div class="empty" style="width:100%;align-self:center;">本周暂无数据</div>';
+  });
+}
+
+function renderWeekChart(weekData) {
+  const el = document.getElementById('week-chart');
+  if (!weekData || weekData.length === 0) {
+    el.innerHTML = '<div class="empty" style="width:100%;align-self:center;">本周暂无数据</div>';
+    return;
+  }
+  const max = Math.max(...weekData.map(d => d.total_conversations || 0), 1);
+  el.innerHTML = weekData.map(d => {
+    const cnt = d.total_conversations || 0;
+    const h = Math.max(Math.round((cnt / max) * 140), 4);
+    const label = d.date ? d.date.slice(5) : '';
+    return `<div class="bar-item">
+      <div class="bar" style="height:${h}px" title="${d.date}：${cnt} 次对话"></div>
+      <div class="bar-label">${esc(label)}</div>
+    </div>`;
+  }).join('');
+}
+
+async function loadKbSummary() {
+  try {
+    const res = await apiFetch(API + '/knowledge');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.success) {
+      const total = data.data.length;
+      const kwSet = new Set(data.data.flatMap(k => k.keywords || []));
+      document.getElementById('kb-summary').textContent = `共 ${total} 条问答，覆盖 ${kwSet.size} 个关键词。`;
+    }
+  } catch(e) {
+    document.getElementById('kb-summary').textContent = '加载失败';
+  }
+}
+
+/* ===== 对话记录 ===== */
+async function loadConversations() {
+  const tbody = document.getElementById('conv-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="loading">加载中</td></tr>';
+  try {
+    const res = await apiFetch(API + '/chat/list');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    if (!data.conversations || data.conversations.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无对话记录</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.conversations.map(c => {
+      const last = c.lastMessage ? esc(c.lastMessage.content.slice(0, 40)) : '—';
+      const badge = c.status === 'active'
+        ? '<span class="badge badge-green">进行中</span>'
+        : '<span class="badge badge-gray">已结束</span>';
+      return `<tr>
+        <td><strong>${esc(c.visitor_name || '访客')}</strong><br><span style="font-size:11px;color:#9ca3af">${c.visitor_id ? esc(c.visitor_id.slice(0, 12)) + '...' : ''}</span></td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280">${last}</td>
+        <td style="color:#9ca3af;font-size:13px">${fmtTime(c.updated_at)}</td>
+        <td>${badge}</td>
+        <td><button class="btn-link" onclick="viewConversation('${escAttr(c.id)}')">查看</button></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">加载失败：${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function viewConversation(id) {
+  const detail = document.getElementById('conv-detail');
+  detail.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:20px;" class="loading">加载中</div>';
+  openModal('conv-modal');
+  try {
+    const res = await apiFetch(API + '/chat/history/' + id);
+    const data = await res.json();
+    if (!data.success || !data.messages || data.messages.length === 0) {
+      detail.innerHTML = '<div class="empty">暂无消息记录</div>';
+      return;
+    }
+    detail.innerHTML = data.messages.map(m => `
+      <div class="conv-msg ${esc(m.role)}">
+        <div class="role">${m.role === 'user' ? '👤 访客' : '🤖 客服'} · ${fmtTime(m.created_at)}</div>
+        <div class="bubble">${esc(m.content)}</div>
+      </div>`).join('');
+  } catch(e) {
+    detail.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+/* ===== 知识库管理 ===== */
+async function loadKnowledge() {
+  const tbody = document.getElementById('kb-tbody');
+  tbody.innerHTML = '<tr><td colspan="4" class="loading">加载中</td></tr>';
+  try {
+    const res = await apiFetch(API + '/knowledge');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    knowledgeCache = data.data || [];
+    renderKbList(knowledgeCache);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">加载失败：${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderKbList(items) {
+  const tbody = document.getElementById('kb-tbody');
+  if (!items || items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">暂无知识库条目，点击右上角添加</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(k => {
+    const kws = (k.keywords || []).slice(0, 4).map(w => `<span class="badge badge-blue">${esc(w)}</span>`).join('');
+    const preview = esc((k.answer || '').slice(0, 50)) + (k.answer && k.answer.length > 50 ? '...' : '');
+    return `<tr>
+      <td style="font-weight:500">${esc(k.question)}</td>
+      <td style="color:#6b7280;font-size:13px">${preview}</td>
+      <td>${kws || '<span style="color:#9ca3af;font-size:12px">—</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-link" onclick="openEditModal('${escAttr(k.id)}')">编辑</button>
+        <button class="btn-danger" onclick="deleteKb('${escAttr(k.id)}','${escAttr((k.question||'').slice(0,20))}')">删除</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function handleSearch(q) {
+  const t = q.trim().toLowerCase();
+  if (!t) { renderKbList(knowledgeCache); return; }
+  renderKbList(knowledgeCache.filter(k =>
+    k.question.toLowerCase().includes(t) ||
+    (k.answer || '').toLowerCase().includes(t) ||
+    (k.keywords || []).some(w => w.toLowerCase().includes(t))
+  ));
+}
+
+function openAddModal() {
+  document.getElementById('kb-modal-title').textContent = '添加问答';
+  document.getElementById('edit-id').value = '';
+  document.getElementById('input-question').value = '';
+  document.getElementById('input-answer').value = '';
+  document.getElementById('input-keywords').value = '';
+  openModal('kb-modal');
+  setTimeout(() => document.getElementById('input-question').focus(), 100);
+}
+
+function openEditModal(id) {
+  const item = knowledgeCache.find(k => k.id === id);
+  if (!item) { toast('找不到该条目', 'error'); return; }
+  document.getElementById('kb-modal-title').textContent = '编辑问答';
+  document.getElementById('edit-id').value = item.id;
+  document.getElementById('input-question').value = item.question;
+  document.getElementById('input-answer').value = item.answer;
+  document.getElementById('input-keywords').value = (item.keywords || []).join(', ');
+  openModal('kb-modal');
+  setTimeout(() => document.getElementById('input-question').focus(), 100);
+}
+
+async function saveKnowledge() {
+  const id = document.getElementById('edit-id').value.trim();
+  const question = document.getElementById('input-question').value.trim();
+  const answer = document.getElementById('input-answer').value.trim();
+  const kwRaw = document.getElementById('input-keywords').value;
+  const keywords = kwRaw.split(/[,，]/).map(k => k.trim()).filter(Boolean);
+  if (!question) { toast('请填写问题', 'error'); document.getElementById('input-question').focus(); return; }
+  if (!answer)   { toast('请填写答案', 'error'); document.getElementById('input-answer').focus(); return; }
+
+  const url = id ? API + '/knowledge/' + id : API + '/knowledge';
+  const method = id ? 'PUT' : 'POST';
+  const body = { question, answer, keywords };
+  try {
+    const res = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '操作失败');
+    closeModal('kb-modal');
+    toast(id ? '编辑成功' : '添加成功');
+    loadKnowledge();
+  } catch(e) {
+    toast('保存失败：' + e.message, 'error');
+  }
+}
+
+async function deleteKb(id, name) {
+  if (!confirm(`确定删除「${name}」这条问答吗？`)) return;
+  try {
+    const res = await apiFetch(API + '/knowledge/' + id, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error('删除失败');
+    toast('已删除');
+    loadKnowledge();
+  } catch(e) {
+    toast('删除失败：' + e.message, 'error');
+  }
+}
+
+/* ===== 敏感词管理 ===== */
+let sensitiveCache = [];
+let sensitiveStats = { total: 0, categories: 0, detections: 0, todayHits: 0 };
+
+async function loadSensitiveWords() {
+  const tbody = document.getElementById('sw-tbody');
+  tbody.innerHTML = '<tr><td colspan="4" class="loading">加载中</td></tr>';
+  try {
+    const res = await apiFetch(API + '/sensitive/words');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    
+    // API返回的可能是数组或对象
+    let words = data.words || [];
+    if (!Array.isArray(words)) {
+      // 如果是对象，按分类转换
+      const result = [];
+      for (const [category, wordList] of Object.entries(words)) {
+        const catMap = { political: 'politics', pornographic: 'porn', violent: 'violence', advertisement: 'ads', fraud: 'fraud' };
+        for (const word of wordList) {
+          result.push({ word, category: catMap[category] || category, created_at: new Date().toISOString() });
+        }
+      }
+      words = result;
+    }
+    
+    sensitiveCache = words;
+    renderSensitiveList(sensitiveCache);
+    updateSensitiveStats();
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">加载失败：${esc(e.message)}</td></tr>`;
+  }
+}
+
+function updateSensitiveStats() {
+  const categories = new Set(sensitiveCache.map(w => w.category));
+  document.getElementById('sw-total').textContent = sensitiveCache.length;
+  document.getElementById('sw-categories').textContent = categories.size;
+  document.getElementById('sw-detections').textContent = sensitiveStats.detections;
+  document.getElementById('sw-hits').textContent = sensitiveStats.todayHits;
+}
+
+function renderSensitiveList(words) {
+  const tbody = document.getElementById('sw-tbody');
+  if (!words || words.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">暂无敏感词，点击右上角添加</td></tr>';
+    return;
+  }
+  const categoryNames = { politics: '政治敏感', porn: '色情低俗', violence: '暴力恐怖', ads: '广告推广', custom: '自定义' };
+  tbody.innerHTML = words.map(w => `
+    <tr>
+      <td><span class="badge badge-gray">${esc(categoryNames[w.category] || w.category)}</span></td>
+      <td style="font-weight:500;color:#374151;">${esc(w.word)}</td>
+      <td style="color:#9ca3af;font-size:13px;">${esc(w.created_at ? new Date(w.created_at).toLocaleString('zh-CN') : '—')}</td>
+      <td>
+        <button class="btn-danger" onclick="deleteSensitiveWord('${escAttr(w.word)}','${escAttr(w.category)}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterSensitiveWords() {
+  const category = document.getElementById('sw-category-filter').value;
+  const search = document.getElementById('sw-search').value.trim().toLowerCase();
+  
+  const filtered = sensitiveCache.filter(w => {
+    const matchCat = !category || w.category === category;
+    const matchSearch = !search || w.word.toLowerCase().includes(search);
+    return matchCat && matchSearch;
+  });
+  
+  renderSensitiveList(filtered);
+}
+
+function clearSensitiveFilter() {
+  document.getElementById('sw-category-filter').value = '';
+  document.getElementById('sw-search').value = '';
+  renderSensitiveList(sensitiveCache);
+}
+
+function openSensitiveModal() {
+  document.getElementById('sw-edit-id').value = '';
+  document.getElementById('sw-input-category').value = 'custom';
+  document.getElementById('sw-input-word').value = '';
+  openModal('sw-modal');
+  setTimeout(() => document.getElementById('sw-input-word').focus(), 100);
+}
+
+async function saveSensitiveWord() {
+  const category = document.getElementById('sw-input-category').value;
+  const wordRaw = document.getElementById('sw-input-word').value.trim();
+  
+  if (!wordRaw) {
+    toast('请输入敏感词', 'error');
+    document.getElementById('sw-input-word').focus();
+    return;
+  }
+  
+  const words = wordRaw.split(/[,，]/).map(w => w.trim()).filter(Boolean);
+  
+  try {
+    const res = await apiFetch(API + '/sensitive/words', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, word: words.join(',') })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    closeModal('sw-modal');
+    toast(`已添加 ${words.length} 个敏感词`);
+    loadSensitiveWords();
+  } catch(e) {
+    toast('添加失败：' + e.message, 'error');
+  }
+}
+
+async function deleteSensitiveWord(word, category) {
+  if (!confirm(`确定删除敏感词「${word}」吗？`)) return;
+  try {
+    const res = await apiFetch(API + '/sensitive/words', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, word })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    toast('已删除');
+    loadSensitiveWords();
+  } catch(e) {
+    toast('删除失败：' + e.message, 'error');
+  }
+}
+
+async function testSensitiveDetect() {
+  const text = document.getElementById('sw-test-input').value.trim();
+  const resultEl = document.getElementById('sw-test-result');
+  
+  if (!text) {
+    toast('请输入要检测的文本', 'error');
+    return;
+  }
+  
+  try {
+    const res = await apiFetch(API + '/sensitive/detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+    
+    resultEl.style.display = 'block';
+    if (data.hasSensitive) {
+      resultEl.innerHTML = `<span style="color:#dc2626;">❌ 包含敏感词: ${esc(data.words ? data.words.join(', ') : '')}</span>`;
+    } else {
+      resultEl.innerHTML = `<span style="color:#16a34a;">✅ 未检测到敏感词</span>`;
+    }
+  } catch(e) {
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<span style="color:#dc2626;">检测失败：${esc(e.message)}</span>`;
+  }
+}
+
+/* ===== 修改密码 ===== */
+async function changeAdminPassword() {
+  const username = document.getElementById('pwd-username').value.trim();
+  const oldPassword = document.getElementById('pwd-old').value;
+  const newPassword = document.getElementById('pwd-new').value;
+  const confirmPassword = document.getElementById('pwd-confirm').value;
+
+  if (!username || !oldPassword || !newPassword) {
+    toast('请填写全部字段', 'error'); return;
+  }
+  if (newPassword.length < 6) {
+    toast('新密码至少6位', 'error'); return;
+  }
+  if (newPassword !== confirmPassword) {
+    toast('两次密码不一致', 'error'); return;
+  }
+
+  try {
+    const res = await apiFetch(API + '/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, oldPassword, newPassword })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('密码修改成功，下次登录请使用新密码', 'success');
+      document.getElementById('pwd-old').value = '';
+      document.getElementById('pwd-new').value = '';
+      document.getElementById('pwd-confirm').value = '';
+    } else {
+      toast(data.message || '修改失败', 'error');
+    }
+  } catch(e) {
+    toast('请求失败: ' + e.message, 'error');
+  }
+}
+
+/* ===== 系统设置 ===== */
+function saveSettings() {
+  const cfg = {
+    company: document.getElementById('cfg-company').value,
+    name: document.getElementById('cfg-name').value,
+    welcome: document.getElementById('cfg-welcome').value
+  };
+  localStorage.setItem('service-config', JSON.stringify(cfg));
+  toast('基本设置已保存');
+}
+
+// 选择AI提供商（单选模式）
+function selectAIProvider(provider) {
+  document.getElementById(`cfg-${provider}-enabled`).checked = true;
+  onProviderChange(provider);
+}
+
+// 当提供商选择变化时
+function onProviderChange(provider) {
+  // 单选模式：选择一个自动取消另一个
+  const otherProvider = provider === 'zhipu' ? 'deepseek' : 'zhipu';
+  document.getElementById(`cfg-${otherProvider}-enabled`).checked = false;
+  
+  // 更新UI状态
+  updateProviderUI(provider);
+  updateProviderUI(otherProvider);
+}
+
+// 更新提供商UI状态
+function updateProviderUI(provider) {
+  const enabled = document.getElementById(`cfg-${provider}-enabled`).checked;
+  const card = document.getElementById(`cfg-${provider}-enabled`).closest('.form-group');
+  
+  if (enabled) {
+    card.style.background = '#eff6ff';
+    card.style.border = '1px solid #2563eb';
+  } else {
+    card.style.background = '#f9fafb';
+    card.style.border = 'none';
+  }
+}
+
+// 保存智谱AI配置
+async function saveZhipuConfig() {
+  const apiKey = document.getElementById('cfg-zhipu-apikey').value.trim();
+  const model = document.getElementById('cfg-zhipu-model').value;
+  const enabled = document.getElementById('cfg-zhipu-enabled').checked;
+  
+  if (enabled && !apiKey) {
+    toast('请输入API Key', 'error');
+    return;
+  }
+  
+  try {
+    // 如果启用智谱AI，先禁用DeepSeek（单选模式）
+    if (enabled) {
+      await apiFetch(API + '/config/ai/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'deepseek' })
+      });
+    }
+    
+    const res = await apiFetch(API + '/config/ai/zhipu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, model, enabled })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || '保存失败');
+    toast('智谱AI配置已保存');
+    // 保留API密钥在输入框中，不清空
+    
+    // 保存成功后显示测试按钮
+    if (enabled && apiKey) {
+      document.getElementById('zhipu-test-btn').style.display = 'block';
+    }
+    
+    loadAIConfig();
+  } catch(e) {
+    toast('保存失败：' + e.message, 'error');
+  }
+}
+
+// 保存DeepSeek配置
+async function saveDeepseekConfig() {
+  const apiKey = document.getElementById('cfg-deepseek-apikey').value.trim();
+  const model = document.getElementById('cfg-deepseek-model').value;
+  const enabled = document.getElementById('cfg-deepseek-enabled').checked;
+  
+  if (enabled && !apiKey) {
+    toast('请输入API Key', 'error');
+    return;
+  }
+  
+  try {
+    // 如果启用DeepSeek，先禁用智谱AI（单选模式）
+    if (enabled) {
+      await apiFetch(API + '/config/ai/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'zhipu' })
+      });
+    }
+    
+    const res = await apiFetch(API + '/config/ai/deepseek', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, model, enabled })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || '保存失败');
+    toast('DeepSeek配置已保存');
+    // 保留API密钥在输入框中，不清空
+    
+    // 保存成功后显示测试按钮
+    if (enabled && apiKey) {
+      document.getElementById('deepseek-test-btn').style.display = 'block';
+    }
+    
+    loadAIConfig();
+  } catch(e) {
+    toast('保存失败：' + e.message, 'error');
+  }
+}
+
+// 保存默认提供商
+async function saveDefaultProvider() {
+  const provider = document.getElementById('cfg-default-provider').value;
+  try {
+    const res = await apiFetch(API + '/config/ai/default-provider', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || '设置失败');
+    toast('默认AI已设置为：' + (provider === 'zhipu' ? '智谱AI' : 'DeepSeek'));
+  } catch(e) {
+    toast('设置失败：' + e.message, 'error');
+  }
+}
+
+// 测试AI连接
+async function testAIProvider(provider) {
+  const resultEl = document.getElementById(`${provider}-test-result`);
+  const badgeEl = document.getElementById(`${provider}-connected-badge`);
+  const testBtn = document.getElementById(`${provider}-test-btn`);
+  
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<span style="color:#6b7280;">测试中...</span>';
+  // 测试期间禁用测试按钮
+  testBtn.disabled = true;
+  testBtn.style.opacity = '0.6';
+  
+  try {
+    const res = await apiFetch(API + '/config/ai/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider })
+    }, 20000);
+    
+    // 检查HTTP响应状态
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error('服务器错误(' + res.status + '): ' + errorText);
+    }
+    
+    const data = await res.json();
+    log('测试' + provider + '结果:', data);
+    
+    if (data.success) {
+      // 测试成功：显示已连接，隐藏测试按钮
+      resultEl.innerHTML = '<span style="color:#16a34a;">✅ ' + esc(data.message || '连接成功') + '</span>';
+      badgeEl.style.display = 'inline-flex';
+      testBtn.style.display = 'none';
+      toast(provider === 'zhipu' ? '智谱AI连接成功' : 'DeepSeek连接成功');
+    } else {
+      // 测试失败：保留测试按钮，提示重试
+      resultEl.innerHTML = '<span style="color:#dc2626;">❌ ' + esc(data.message || '测试失败') + '，请检查后重试</span>';
+      badgeEl.style.display = 'none';
+      testBtn.disabled = false;
+      testBtn.style.opacity = '1';
+      testBtn.textContent = '🧪 重新测试';
+    }
+  } catch(e) {
+    logErr('测试' + provider + '失败:', e);
+    // 网络/服务器错误：保留测试按钮，提示重试
+    resultEl.innerHTML = '<span style="color:#dc2626;">❌ ' + esc(e.message) + '，请检查后重试</span>';
+    badgeEl.style.display = 'none';
+    testBtn.disabled = false;
+    testBtn.style.opacity = '1';
+    testBtn.textContent = '🧪 重新测试';
+  }
+}
+
+// 加载AI配置
+async function loadAIConfig() {
+  try {
+    const res = await apiFetch(API + '/config/ai/detail');
+    const data = await res.json();
+    if (data.success && data.data) {
+      const cfg = data.data;
+      // 智谱AI
+      const zhipuEnabled = cfg.zhipu?.enabled || false;
+      document.getElementById('cfg-zhipu-enabled').checked = zhipuEnabled;
+      document.getElementById('cfg-zhipu-model').value = cfg.zhipu?.model || 'glm-4-flash';
+      // 填充API Key到输入框（如果有）
+      if (cfg.zhipu?.apiKey) {
+        document.getElementById('cfg-zhipu-apikey').value = cfg.zhipu.apiKey;
+      }
+      // DeepSeek
+      const deepseekEnabled = cfg.deepseek?.enabled || false;
+      document.getElementById('cfg-deepseek-enabled').checked = deepseekEnabled;
+      document.getElementById('cfg-deepseek-model').value = cfg.deepseek?.model || 'deepseek-chat';
+      // 填充API Key到输入框（如果有）
+      if (cfg.deepseek?.apiKey) {
+        document.getElementById('cfg-deepseek-apikey').value = cfg.deepseek.apiKey;
+      }
+      // 默认提供商
+      document.getElementById('cfg-default-provider').value = cfg.defaultProvider || 'zhipu';
+      
+      // 更新UI状态
+      updateProviderUI('zhipu');
+      updateProviderUI('deepseek');
+      
+      // 根据是否有API Key显示/隐藏测试按钮
+      const zhipuHasKey = cfg.zhipu?.apiKey && cfg.zhipu.apiKey.length > 0;
+      const deepseekHasKey = cfg.deepseek?.apiKey && cfg.deepseek.apiKey.length > 0;
+      
+      // 智谱AI：已保存密钥且启用时显示测试按钮
+      if (zhipuEnabled && zhipuHasKey) {
+        document.getElementById('zhipu-test-btn').style.display = 'block';
+      } else {
+        document.getElementById('zhipu-test-btn').style.display = 'none';
+        document.getElementById('zhipu-connected-badge').style.display = 'none';
+      }
+      
+      // DeepSeek：已保存密钥且启用时显示测试按钮
+      if (deepseekEnabled && deepseekHasKey) {
+        document.getElementById('deepseek-test-btn').style.display = 'block';
+      } else {
+        document.getElementById('deepseek-test-btn').style.display = 'none';
+        document.getElementById('deepseek-connected-badge').style.display = 'none';
+      }
+      
+      // 更新状态
+      const anyEnabled = (zhipuEnabled && zhipuHasKey) || (deepseekEnabled && deepseekHasKey);
+      updateAIStatusBadge(anyEnabled);
+    }
+  } catch(e) {
+    log('加载AI配置失败:', e);
+  }
+}
+
+function updateAIStatusBadge(enabled) {
+  const badge = document.getElementById('ai-status-badge');
+  if (enabled) {
+    badge.className = 'badge badge-green';
+    badge.textContent = '已启用';
+  } else {
+    badge.className = 'badge badge-gray';
+    badge.textContent = '未配置';
+  }
+}
+
+function loadSettings() {
+  try {
+    const cfg = JSON.parse(localStorage.getItem('service-config') || '{}');
+    if (cfg.company) document.getElementById('cfg-company').value = cfg.company;
+    if (cfg.name) document.getElementById('cfg-name').value = cfg.name;
+    if (cfg.welcome) document.getElementById('cfg-welcome').value = cfg.welcome;
+  } catch(e) {
+    logErr('[品牌配置] 加载失败:', e);
+  }
+}
+
+/* ===== 初始化 ===== */
+function initApp() {
+  loadSettings();
+  checkHealth().then(() => {
+    if (healthOk) {
+      loadStats();
+      loadAIConfig();
+    }
+  });
+}
+
+// 页面显示时（包括从 bfcache 恢复、浏览器后退），重新检查登录状态
+window.addEventListener('pageshow', function(e) {
+  const savedAuth = localStorage.getItem('authHeader');
+  const savedUser = localStorage.getItem('currentUser');
+  const loginModal = document.getElementById('login-modal');
+  if (savedAuth && savedUser && !isLoggedIn) {
+    // localStorage 有凭证且当前未登录 → 恢复登录状态
+    authHeader = savedAuth;
+    currentUser = savedUser;
+    isLoggedIn = true;
+    loginModal.style.display = 'none';
+    initApp();
+  } else if (!savedAuth || !savedUser) {
+    // 无凭证，显示登录框
+    loginModal.style.display = 'flex';
+  }
+  // 已登录的情况：什么都不做，避免重复 initApp
+});
+async function loadBrandConfig() {
+  try {
+    const res = await apiFetch(API + '/config/brand/detail');
+    const data = await res.json();
+    if (data.success && data.data) {
+      const b = data.data;
+      
+      // 基本信息
+      document.getElementById('brand-name-input').value = b.name || '';
+      document.getElementById('brand-logo-input').value = b.logo || '🤖';
+      document.getElementById('brand-botname-input').value = b.botName || '小智';
+      document.getElementById('brand-desc-input').value = b.description || '';
+      
+      // 主题色
+      document.getElementById('brand-color-input').value = b.primaryColor || '#2563eb';
+      document.getElementById('brand-grad-start-input').value = b.headerGradientStart || '#2563eb';
+      document.getElementById('brand-grad-end-input').value = b.headerGradientEnd || '#1d4ed8';
+      updatePreview(b);
+      
+      // 欢迎消息
+      document.getElementById('brand-welcome-input').value = (b.welcomeMessage || '').replace(/<br>/g, '\n');
+      
+      // 快捷问题
+      renderQuickQList(b.quickQuestions || []);
+      
+      // 其他文案
+      document.getElementById('brand-placeholder-input').value = b.placeholder || '';
+      document.getElementById('brand-footer-input').value = b.footerHint || '';
+      document.getElementById('brand-rating-title-input').value = b.ratingTitle || '';
+      document.getElementById('brand-rating-subtitle-input').value = b.ratingSubtitle || '';
+      document.getElementById('brand-hotline-input').value = b.hotline || '';
+      document.getElementById('brand-copyright-input').value = b.copyright || '';
+    }
+  } catch(e) {
+    toast('加载品牌配置失败: ' + e.message, 'error');
+  }
+}
+
+function updatePreview(b) {
+  const preview = document.getElementById('brand-preview');
+  preview.style.background = `linear-gradient(135deg, ${b.primaryColor || '#2563eb'}, ${b.headerGradientEnd || '#1d4ed8'})`;
+  document.getElementById('preview-logo').textContent = b.logo || '🤖';
+  document.getElementById('preview-name').textContent = b.name || 'AI智能客服';
+}
+
+// 实时预览颜色变化
+['brand-color-input', 'brand-grad-start-input', 'brand-grad-end-input'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => {
+    const b = {
+      primaryColor: document.getElementById('brand-color-input').value,
+      headerGradientEnd: document.getElementById('brand-grad-end-input').value,
+      logo: document.getElementById('brand-logo-input').value,
+      name: document.getElementById('brand-name-input').value
+    };
+    updatePreview(b);
+  });
+});
+
+// Logo和名称实时更新预览
+document.getElementById('brand-logo-input')?.addEventListener('input', e => { document.getElementById('preview-logo').textContent = e.target.value; });
+document.getElementById('brand-name-input')?.addEventListener('input', e => { document.getElementById('preview-name').textContent = e.target.value; });
+
+function renderQuickQList(questions) {
+  const container = document.getElementById('quick-q-list');
+  container.innerHTML = '';
+  
+  (questions || []).forEach((q, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px;';
+    div.innerHTML = `
+      <input class="input" value="${escAttr(q.text)}" placeholder="按钮文字" style="flex:1;" data-qidx="${i}" data-field="text">
+      <select style="padding:6px 10px; border-radius:6px; border:1px solid #e5e7eb;" data-qidx="${i}" data-field="action">
+        <option value="question" ${!q.action || q.action === 'question' ? 'selected' : ''}>提问</option>
+        <option value="request_human" ${q.action === 'request_human' ? 'selected' : ''}>转人工</option>
+      </select>
+      <input class="input" value="${escAttr(q.question || '')}" placeholder="提问内容(转人工可留空)" style="flex:1.5;" data-qidx="${i}" data-field="question">
+      <button class="btn-danger" onclick="this.parentElement.remove()">×</button>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function addQuickQ() {
+  const list = document.getElementById('quick-q-list');
+  const count = list.children.length;
+  if (count >= 6) { toast('最多添加6个快捷问题', 'error'); return; }
+  
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px;';
+  div.innerHTML = `
+    <input class="input" placeholder="按钮文字" style="flex:1;">
+    <select style="padding:6px 10px; border-radius:6px; border:1px solid #e5e7eb;">
+      <option value="question">提问</option>
+      <option value="request_human">转人工</option>
+    </select>
+    <input class="input" placeholder="提问内容" style="flex:1.5;">
+    <button class="btn-danger" onclick="this.parentElement.remove()">×</button>
+  `;
+  list.appendChild(div);
+}
+
+function collectQuickQuestions() {
+  const items = [];
+  document.querySelectorAll('#quick-q-list > div').forEach(row => {
+    const inputs = row.querySelectorAll('input, select');
+    if (inputs.length >= 2) {
+      items.push({
+        text: inputs[0].value.trim(),
+        action: inputs[1].value,
+        question: inputs[2].value.trim()
+      });
+    }
+  });
+  return items;
+}
+
+async function saveBrandConfig() {
+  try {
+    const quickQuestions = collectQuickQuestions().filter(q => q.text);
+    
+    const configData = {
+      name: document.getElementById('brand-name-input').value.trim(),
+      logo: document.getElementById('brand-logo-input').value.trim(),
+      description: document.getElementById('brand-desc-input').value.trim(),
+      botName: document.getElementById('brand-botname-input').value.trim(),
+      primaryColor: document.getElementById('brand-color-input').value,
+      headerGradientStart: document.getElementById('brand-grad-start-input').value,
+      headerGradientEnd: document.getElementById('brand-grad-end-input').value,
+      welcomeMessage: document.getElementById('brand-welcome-input').value.replace(/\n/g, '<br>'),
+      quickQuestions: quickQuestions,
+      placeholder: document.getElementById('brand-placeholder-input').value.trim(),
+      footerHint: document.getElementById('brand-footer-input').value.trim(),
+      ratingTitle: document.getElementById('brand-rating-title-input').value.trim(),
+      ratingSubtitle: document.getElementById('brand-rating-subtitle-input').value.trim(),
+      hotline: document.getElementById('brand-hotline-input').value.trim(),
+      copyright: document.getElementById('brand-copyright-input').value.trim()
+    };
+
+    const res = await apiFetch(API + '/config/brand/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(configData)
+    });
+    
+    const data = await res.json();
+    if (data.success) {
+      toast('✅ 品牌配置已保存！刷新访客端页面即可看到效果');
+    } else {
+      throw new Error(data.message || '保存失败');
+    }
+  } catch(e) {
+    toast('保存失败：' + e.message, 'error');
+  }
+}
+
+async function resetBrandConfig() {
+  if (!confirm('确定重置为默认配置？所有自定义设置将丢失。')) return;
+  
+  try {
+    const res = await apiFetch(API + '/config/brand/reset', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      toast('已重置为默认配置');
+      loadBrandConfig();
+    }
+  } catch(e) {
+    toast('重置失败：' + e.message, 'error');
+  }
+}
+
+// ========== 启动：检查 localStorage 凭证，不调接口验证 ==========
+  (function checkLoginOnLoad() {
+    const savedAuth = localStorage.getItem('authHeader');
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedAuth && savedUser) {
+      // localStorage 有凭证 → 直接恢复登录状态，无需调接口验证
+      authHeader = savedAuth;
+      currentUser = savedUser;
+      isLoggedIn = true;
+      document.getElementById('login-modal').style.display = 'none';
+      initApp();
+    } else {
+      // 无凭证 → 显示登录框
+      document.getElementById('login-modal').style.display = 'flex';
+    }
+  })();
+
+/* ========== 批量导入知识库 ========== */
+let pendingImportData = null;  // 暂存解析后的数据
+
+function openImportModal() {
+  pendingImportData = null;
+  document.getElementById('import-step1').style.display = '';
+  document.getElementById('import-step2').style.display = 'none';
+  document.getElementById('import-step3').style.display = 'none';
+  document.getElementById('import-btn-confirm').disabled = true;
+  document.getElementById('import-btn-confirm').style.opacity = '0.5';
+  document.getElementById('import-btn-confirm').textContent = '确 认 导 入';
+  document.getElementById('import-btn-cancel').textContent = '取消';
+  document.getElementById('import-file-input').value = '';
+  document.getElementById('import-drop-zone').style.borderColor = '#e5e7eb';
+  document.getElementById('import-drop-zone').style.background = 'transparent';
+  openModal('import-modal');
+}
+
+function closeImportModal() {
+  closeModal('import-modal');
+  pendingImportData = null;
+}
+
+function handleImportDrop(e) {
+  e.preventDefault();
+  document.getElementById('import-drop-zone').style.borderColor = '#e5e7eb';
+  document.getElementById('import-drop-zone').style.background = 'transparent';
+  const file = e.dataTransfer.files[0];
+  if (file) handleImportFile(file);
+}
+
+function handleImportFile(file) {
+  if (!file) return;
+
+  const allowedTypes = ['text/csv', 'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+  const allowedNames = ['.csv', '.xlsx', '.xls'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+  if (!allowedTypes.includes(file.type) && !allowedNames.includes(ext)) {
+    toast('只支持 .csv 或 .xlsx 文件', 'error');
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    toast('文件不能超过 2MB', 'error');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  // 显示加载状态
+  const dropZone = document.getElementById('import-drop-zone');
+  dropZone.innerHTML = `<div style="font-size:28px;margin-bottom:8px;">⏳</div><div style="font-size:14px;color:#374151;font-weight:500;">正在解析文件...</div><div style="font-size:12px;color:#9ca3af;margin-top:4px;">${esc(file.name)}</div>`;
+
+  apiFetchWithForm(API + '/knowledge/import/parse', formData)
+    .then(data => {
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+      pendingImportData = data;
+      renderImportPreview(data);
+      document.getElementById('import-step1').style.display = 'none';
+      document.getElementById('import-step2').style.display = '';
+      document.getElementById('import-step3').style.display = 'none';
+      document.getElementById('import-btn-confirm').disabled = false;
+      document.getElementById('import-btn-confirm').style.opacity = '';
+      document.getElementById('import-btn-cancel').textContent = '返回';
+    })
+    .catch(e => {
+      toast('解析失败：' + e.message, 'error');
+      // 恢复上传区
+      dropZone.innerHTML = `
+        <div style="font-size:28px;margin-bottom:8px;">📁</div>
+        <div style="font-size:14px;color:#374151;font-weight:500;">点击上传文件，或拖拽文件到这里</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .xlsx，单文件不超过 2MB</div>
+        <input type="file" id="import-file-input" accept=".csv,.xlsx,text/csv,application/vnd.ms-excel" style="display:none;" onchange="handleImportFile(this.files[0])">`;
+    });
+}
+
+function renderImportPreview(data) {
+  const { preview, summary, errors } = data;
+
+  // 汇总标签
+  document.getElementById('import-summary').innerHTML = `
+    <span style="background:#dcfce7;color:#16a34a;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;">
+      🆕 新增 ${summary.new} 条
+    </span>
+    ${summary.duplicates > 0 ? `<span style="background:#fef3c7;color:#d97706;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;">⏭️ 跳过 ${summary.duplicates} 条重复</span>` : ''}
+    ${summary.errors > 0 ? `<span style="background:#fee2e2;color:#dc2626;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;">⚠️ ${summary.errors} 行错误</span>` : ''}
+  `;
+
+  // 预览表格
+  const tbody = document.getElementById('import-preview-body');
+  tbody.innerHTML = preview.map(item => `
+    <tr style="${item.isDuplicate ? 'background:#fffbeb;' : ''}">
+      <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;font-size:13px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(item.question)}">
+        ${item.isDuplicate ? '<span title="与现有问题重复" style="color:#d97706;">🔄</span> ' : ''}${esc(item.question)}
+      </td>
+      <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(item.answer)}">
+        ${esc(item.answer)}
+      </td>
+      <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;font-size:11px;color:#9ca3af;">
+        ${(item.keywords || []).slice(0, 3).map(w => esc(w)).join(', ')}${(item.keywords || []).length > 3 ? '...' : ''}
+      </td>
+      <td style="padding:7px 12px;border-bottom:1px solid #f3f4f6;text-align:center;font-size:12px;">
+        ${item.isDuplicate
+          ? '<span style="color:#d97706;">重复</span>'
+          : '<span style="color:#16a34a;">✓ 新增</span>'}
+      </td>
+    </tr>
+  `).join('');
+
+  // 错误摘要
+  const errEl = document.getElementById('import-error-summary');
+  if (errors && errors.length > 0) {
+    errEl.style.display = '';
+    errEl.innerHTML = `<div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:12px;color:#dc2626;">
+      <strong>部分行解析失败：</strong>${errors.map(e => `第${e.row}行：${esc(e.error)}`).join('；')}
+    </div>`;
+  } else {
+    errEl.style.display = 'none';
+  }
+}
+
+async function confirmImport() {
+  if (!pendingImportData || !pendingImportData.preview) return;
+
+  const btn = document.getElementById('import-btn-confirm');
+  btn.disabled = true;
+  btn.textContent = '⏳ 导入中...';
+
+  try {
+    const validItems = pendingImportData.preview
+      .filter(item => !item.isDuplicate && item.question && item.answer)
+      .map(item => ({ question: item.question, answer: item.answer, keywords: item.keywords || [] }));
+
+    if (validItems.length === 0) {
+      throw new Error('没有可导入的新数据');
+    }
+
+    const res = await fetch(API + '/knowledge/import/confirm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader
+      },
+      body: JSON.stringify({ items: validItems })
+    });
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    // 显示结果
+    document.getElementById('import-step2').style.display = 'none';
+    document.getElementById('import-step3').style.display = '';
+    document.getElementById('import-result-icon').textContent = '🎉';
+    document.getElementById('import-result-msg').textContent = '导入成功！';
+    document.getElementById('import-result-msg').style.color = '#16a34a';
+    document.getElementById('import-result-detail').innerHTML =
+      `成功导入 <strong>${data.imported}</strong> 条${data.skipped > 0 ? `，跳过 <strong>${data.skipped}</strong> 条重复` : ''}`;
+
+    document.getElementById('import-btn-confirm').textContent = '完 成';
+    document.getElementById('import-btn-confirm').disabled = false;
+    document.getElementById('import-btn-confirm').onclick = () => {
+      closeImportModal();
+      loadKnowledge();  // 刷新知识库列表
+    };
+
+    pendingImportData = null;
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '确 认 导 入';
+    toast('导入失败：' + e.message, 'error');
+  }
+}
+
+// FormData 专用 fetch（不设置 Content-Type，让浏览器自动加 boundary）
+async function apiFetchWithForm(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': authHeader },
+    body
+  });
+  if (res.status === 401) {
+    showLoginForm();
+    throw new Error('Unauthorized');
+  }
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '未知错误');
+    throw new Error('HTTP ' + res.status + ': ' + errText);
+  }
+  return res.json();
+}
+
+// 每30秒自动检查一次连接
+setInterval(() => checkHealth(), 30000);
+
+// Tab Enter 快捷键
+document.getElementById('input-question').addEventListener('keydown', e => {
+  if (e.key === 'Tab') { e.preventDefault(); document.getElementById('input-answer').focus(); }
+});
+</script>
+</body>
+</html>

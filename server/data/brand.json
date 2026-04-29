@@ -1,0 +1,46 @@
+{
+  "name": "AI智能客服",
+  "logo": "🤖",
+  "description": "智能客服助手，7×24小时为您服务",
+  "primaryColor": "#2563eb",
+  "headerGradientStart": "#2563eb",
+  "headerGradientEnd": "#1d4ed8",
+  "botName": "客服小冲",
+  "welcomeMessage": "您好！我是客服小冲，很高兴为您服务！我可以帮您解答常见问题，也可以点击[转人工]连接人工客服。",
+  "quickQuestions": [
+    {
+      "text": "车辆没电",
+      "action": "question",
+      "question": "车骑着骑着就没电了，走不动了"
+    },
+    {
+      "text": "转人工",
+      "action": "request_human",
+      "question": ""
+    },
+    {
+      "text": "工作时间",
+      "action": "question",
+      "question": "客服工作时间是什么时候"
+    },
+    {
+      "text": "车坏了",
+      "action": "question",
+      "question": "车头是歪的，刹车失灵"
+    }
+  ],
+  "statusText": {
+    "active": "会话活跃中",
+    "idle": "会话空闲中",
+    "closed": "会话已结束",
+    "human": "人工客服：{agentName}",
+    "queue": "排队中（第{position}位）"
+  },
+  "placeholder": "输入您的问题...",
+  "footerHint": "Enter 发送 · Shift+Enter 换行",
+  "ratingTitle": "评价",
+  "ratingSubtitle": "反馈",
+  "hotline": "15919194112",
+  "copyright": "© 2026 同城科技公司",
+  "updatedAt": "2026-04-29T03:46:02.713Z"
+}

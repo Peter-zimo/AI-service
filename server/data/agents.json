@@ -1,0 +1,12 @@
+[
+  {
+    "id": "agent_001",
+    "name": "客服小A",
+    "avatar": "👩",
+    "password": "$2b$10$tY9nJa8tSAcjZJWfmFiNneQz4gykx.neKelQ9XJ/Vp4/PPOY2Rghm",
+    "status": "offline",
+    "currentConversation": null,
+    "totalServed": 0,
+    "createdAt": "2026-04-18T07:57:03.936Z"
+  }
+]

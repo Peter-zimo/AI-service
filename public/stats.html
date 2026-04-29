@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>数据统计 - AI智能客服</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-light: #bfdbfe;
+      --primary-bg: #eff6ff;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+      --gray-300: #d1d5db; --gray-400: #9ca3af; --gray-500: #6b7280;
+      --gray-600: #4b5563; --gray-700: #374151; --gray-800: #1f2937;
+      --radius: 12px; --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Noto Sans SC', -apple-system, sans-serif; background: #f0f2f5; color: var(--gray-800); min-height: 100vh; }
+
+    /* 顶部导航 */
+    .navbar {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: #fff; padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(37,99,235,0.25);
+    }
+    .navbar h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+    .navbar-actions { display: flex; gap: 10px; }
+    .nav-btn {
+      background: rgba(255,255,255,0.2); border: none; color: #fff;
+      padding: 7px 16px; border-radius: 20px; font-size: 13px; cursor: pointer;
+      font-family: inherit; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,0.32); transform: translateY(-1px); }
+
+    /* 主容器 */
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px 24px; }
+
+    /* 概览卡片行 */
+    .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card {
+      background: #fff; border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow); position: relative; overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+    .card-icon {
+      width: 44px; height: 44px; border-radius: 12px; display: flex;
+      align-items: center; justify-content: center; font-size: 20px; margin-bottom: 12px;
+    }
+    .card-icon.blue { background: var(--primary-bg); color: var(--primary); }
+    .card-icon.green { background: #f0fdf4; color: var(--success); }
+    .card-icon.yellow { background: #fefce8; color: var(--warning); }
+    .card-icon.purple { background: #faf5ff; color: #a855f7; }
+    .card-label { font-size: 13px; color: var(--gray-500); margin-bottom: 4px; }
+    .card-value { font-size: 28px; font-weight: 700; line-height: 1.2; color: var(--gray-800); }
+    .card-sub { font-size: 12px; color: var(--gray-400); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+    .card-sub.up { color: var(--success); }
+    .card-sub.down { color: var(--danger); }
+
+    /* 图表区域 */
+    .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-card {
+      background: #fff; border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .chart-title { font-size: 15px; font-weight: 600; color: var(--gray-800); }
+    .chart-subtitle { font-size: 12px; color: var(--gray-400); }
+    .chart-body { position: relative; height: 280px; }
+
+    /* 第二行图表 */
+    .charts-row2 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+    /* 数据表格区 */
+    .table-section { background: #fff; border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .section-title { font-size: 15px; font-weight: 600; color: var(--gray-800); }
+    .tab-group { display: flex; gap: 4px; background: var(--gray-100); padding: 3px; border-radius: 8px; }
+    .tab-btn {
+      padding: 6px 14px; border: none; background: transparent; border-radius: 6px;
+      font-size: 13px; cursor: pointer; font-family: inherit; color: var(--gray-500);
+      transition: all 0.15s;
+    }
+    .tab-btn.active { background: #fff; color: var(--gray-800); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .tab-btn:hover:not(.active) { color: var(--gray-700); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 500;
+      color: var(--gray-500); border-bottom: 1px solid var(--gray-200); white-space: nowrap;
+    }
+    td { padding: 10px 14px; font-size: 13px; color: var(--gray-700); border-bottom: 1px solid var(--gray-100); }
+    tr:hover td { background: var(--gray-50); }
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
+    }
+    .badge-active { background: #dcfce7; color: #16a34a; }
+    .badge-idle { background: #fefce8; color: #ca8a04; }
+    .badge-closed { background: #f3f4f6; color: var(--gray-500); }
+    .badge-ai { background: var(--primary-bg); color: var(--primary); }
+    .badge-human { background: #faf5ff; color: #a855f7; }
+    .score-stars { letter-spacing: 1px; }
+    .question-text { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* 分页 */
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 16px; }
+    .page-btn {
+      padding: 6px 12px; border: 1px solid var(--gray-200); background: #fff;
+      border-radius: 6px; font-size: 13px; cursor: pointer; font-family: inherit;
+      color: var(--gray-600); transition: all 0.15s;
+    }
+    .page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* 加载状态 */
+    .loading { text-align: center; padding: 40px; color: var(--gray-400); }
+    .loading-spinner {
+      width: 32px; height: 32px; border: 3px solid var(--gray-200);
+      border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 空状态 */
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--gray-400); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* 刷新时间 */
+    .refresh-info { text-align: right; font-size: 11px; color: var(--gray-400); margin-top: -8px; margin-bottom: 16px; }
+    .refresh-btn {
+      background: none; border: 1px solid var(--gray-200); color: var(--gray-500);
+      padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+      font-family: inherit; transition: all 0.15s;
+    }
+    .refresh-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* 响应式 */
+    @media (max-width: 1024px) {
+      .cards-row { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .charts-row2 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .container { padding: 12px; }
+      .cards-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .card-value { font-size: 22px; }
+      .navbar { padding: 12px 16px; }
+      .navbar h1 { font-size: 15px; }
+      .chart-body { height: 220px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 导航栏 -->
+<div class="navbar">
+  <h1>📊 数据统计面板</h1>
+  <div class="navbar-actions">
+    <button class="nav-btn" onclick="refreshAll()">🔄 刷新</button>
+    <button class="nav-btn" onclick="window.open('/api/stats/export/xlsx','_blank')">📤 Excel</button>
+    <button class="nav-btn" onclick="window.open('/api/stats/export/csv','_blank')">📄 CSV</button>
+    <a class="nav-btn" href="/admin.html">⚙️ 返回管理</a>
+  </div>
+</div>
+
+<div class="container">
+  <!-- 刷新信息 -->
+  <div class="refresh-info">
+    <span id="refresh-time">--</span>
+    <button class="refresh-btn" onclick="refreshAll()">刷新数据</button>
+  </div>
+
+  <!-- 概览卡片 -->
+  <div class="cards-row" id="overview-cards">
+    <div class="loading"><div class="loading-spinner"></div>加载中...</div>
+  </div>
+
+  <!-- 趋势图 + 处理方式分布 -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div><span class="chart-title">对话趋势</span> <span class="chart-subtitle">（近30天）</span></div>
+        <div class="tab-group">
+          <button class="tab-btn active" data-range="30" onclick="changeRange(this, 30)">30天</button>
+          <button class="tab-btn" data-range="14" onclick="changeRange(this, 14)">14天</button>
+          <button class="tab-btn" data-range="7" onclick="changeRange(this, 7)">7天</button>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">处理方式分布</span>
+      </div>
+      <div class="chart-body"><canvas id="modeChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 满意度 + 日均 + 高频问题 -->
+  <div class="charts-row2">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">满意度分布</span>
+      </div>
+      <div class="chart-body"><canvas id="satisfactionChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">满意度趋势</span><br><span class="chart-subtitle">（近14天）</span>
+      </div>
+      <div class="chart-body"><canvas id="satTrendChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">今日关键指标</span>
+      </div>
+      <div style="padding: 8px 0;" id="today-metrics">
+        <div class="loading"><div class="loading-spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 高频问题 TOP10 -->
+  <div class="table-section">
+    <div class="section-header">
+      <span class="section-title">🔥 高频问题 TOP 10</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>用户提问</th><th>出现次数</th><th>占比</th></tr>
+      </thead>
+      <tbody id="top-questions-tbody">
+        <tr><td colspan="4" class="empty-state"><div class="loading-spinner"></div>加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 会话列表 -->
+  <div class="table-section">
+    <div class="section-header">
+      <span class="section-title">💬 最近会话记录</span>
+      <div class="tab-group">
+        <button class="tab-btn active" data-status="" onclick="filterConv(this, '')">全部</button>
+        <button class="tab-btn" data-status="active" onclick="filterConv(this, 'active')">活跃</button>
+        <button class="tab-btn" data-status="closed" onclick="filterConv(this, 'closed')">已结束</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>访客</th><th>状态</th><th>模式</th><th>消息数</th><th>评价</th><th>创建时间</th><th>最后更新</th>
+        </tr>
+      </thead>
+      <tbody id="conversations-tbody">
+        <tr><td colspan="7" class="empty-state"><div class="loading-spinner"></div>加载中...</td></tr>
+      </tbody>
+    </table>
+    <div class="pagination" id="conv-pagination"></div>
+  </div>
+</div>
+
+<script>
+const API = '/api/stats';
+let trendDays = 30;
+let currentStatus = '';
+let currentPage = 1;
+const PAGE_SIZE = 15;
+let authHeader = null;
+
+// Chart.js 实例
+let trendChart = null;
+let modeChart = null;
+let satisfactionChart = null;
+let satTrendChart = null;
+
+// 颜色主题
+const COLORS = {
+  primary: '#2563eb',
+  primaryLight: 'rgba(37,99,235,0.1)',
+  success: '#22c55e',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  purple: '#a855f7',
+  gray: '#9ca3af',
+};
+
+// ========== XSS 防护 ==========
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// ========== 认证（与admin.html一致：使用localStorage）==========
+
+function getAuthHeader() {
+  // 优先从 localStorage 读取（与管理后台共享登录状态）
+  if (!authHeader) {
+    authHeader = localStorage.getItem('authHeader');
+  }
+  return authHeader || '';
+}
+
+async function apiFetch(url) {
+  const headers = {};
+  const token = getAuthHeader();
+  if (token) headers['Authorization'] = token;
+
+  const res = await fetch(url, { headers });
+
+  if (res.status === 401) {
+    showLoginForm();
+    throw new Error('Unauthorized');
+  }
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '未知错误');
+    throw new Error(`HTTP ${res.status}: ${errText}`);
+  }
+
+  return res.json();
+}
+
+function showLoginForm() {
+  // 如果已有登录弹窗则不重复创建
+  if (document.getElementById('login-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'login-overlay';
+  overlay.innerHTML = `
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999">
+      <div style="background:#fff;border-radius:16px;padding:32px;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.25)">
+        <h2 style="font-size:18px;font-weight:600;margin-bottom:20px;text-align:center;color:#1f2937">🔐 管理员登录</h2>
+        <div style="margin-bottom:14px">
+          <label style="font-size:13px;color:#6b7280;display:block;margin-bottom:5px">账号</label>
+          <input id="lg-user" type="text" value="" placeholder="请输入账号" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box" onkeydown="if(event.key==='Enter')document.getElementById('lg-pass').focus()">
+        </div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:13px;color:#6b7280;display:block;margin-bottom:5px">密码</label>
+          <input id="lg-pass" type="password" placeholder="请输入密码" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button onclick="doLogin()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:12px;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">登 录</button>
+        <p id="lg-err" style="color:#ef4444;font-size:12px;text-align:center;margin-top:10px;display:none"></p>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('lg-pass').focus(), 100);
+}
+
+async function doLogin() {
+  const u = document.getElementById('lg-user').value.trim();
+  const p = document.getElementById('lg-pass').value;
+  const errEl = document.getElementById('lg-err');
+
+  if (!u || !p) { errEl.textContent = '请输入账号和密码'; errEl.style.display='block'; return; }
+
+  try {
+    const res = await fetch('/api/health', { headers: { 'Authorization': 'Basic ' + btoa(u + ':' + p) } });
+    if (!res.ok) throw new Error('认证失败');
+
+    authHeader = 'Basic ' + btoa(u + ':' + p);
+    localStorage.setItem('authHeader', authHeader);
+    localStorage.setItem('currentUser', u);
+    
+    // 移除登录框
+    const overlay = document.getElementById('login-overlay');
+    if (overlay) overlay.remove();
+
+    // 加载数据
+    refreshAll();
+  } catch (e) {
+    errEl.textContent = '账号或密码错误';
+    errEl.style.display = 'block';
+  }
+}
+
+// ========== 加载概览卡片 ==========
+async function loadOverview() {
+  try {
+    const d = await apiFetch(API + '/overview');
+    if (!d.success) return;
+    const o = d.data;
+
+    document.getElementById('overview-cards').innerHTML = `
+      <div class="card">
+        <div class="card-icon blue">💬</div>
+        <div class="card-label">总对话量</div>
+        <div class="card-value">${o.totalConversations}</div>
+        <div class="card-sub ${o.today.growth >= 0 ? 'up' : ''}">
+          ${o.today.growth >= 0 ? '↑' : '↓'} 今日 ${o.today.conversations} 单（较昨日${o.today.growth > 0 ? '+' : ''}${o.today.growth}%）
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon green">✉️</div>
+        <div class="card-label">总消息数</div>
+        <div class="card-value">${o.totalMessages}</div>
+        <div class="card-sub">今日 ${o.today.messages} 条 · 本周 ${o.week.messages} 条</div>
+      </div>
+      <div class="card">
+        <div class="card-icon yellow">⭐</div>
+        <div class="card-label">平均满意度</div>
+        <div class="card-value">${o.avgSatisfaction || '--'}</div>
+        <div class="card-sub">共 ${o.totalRatings} 条评价 · 活跃会话 ${o.activeConversations}</div>
+      </div>
+      <div class="card">
+        <div class="card-icon purple">🤖</div>
+        <div class="card-label">AI处理率</div>
+        <div class="card-value">${o.aiHandlingRate}%</div>
+        <div class="card-sub">AI ${o.handlingDistribution.ai} 单 / 人工 ${o.handlingDistribution.human} 单</div>
+      </div>
+    `;
+
+    // 今日指标详情
+    document.getElementById('today-metrics').innerHTML = `
+      <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)">
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:2px">平均响应时长</div>
+        <div style="font-size:20px;font-weight:600;color:var(--gray-800)">
+          ${o.today.avgResponseMinutes !== null ? o.today.avgResponseMinutes + ' 分钟' : '--'}
+        </div>
+      </div>
+      <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--gray-100)">
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:2px">本周对话量</div>
+        <div style="font-size:20px;font-weight:600;color:var(--gray-800)">${o.week.conversations} 单</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:2px">本月对话量</div>
+        <div style="font-size:20px;font-weight:600;color:var(--gray-800)">${o.month.conversations} 单</div>
+      </div>
+    `;
+  } catch (e) {
+    console.error('概览加载失败:', e);
+  }
+}
+
+// ========== 趋势图 ==========
+async function loadTrend() {
+  try {
+    const d = await apiFetch(API + `/trend?days=${trendDays}`);
+    if (!d.success) return;
+    const data = d.data;
+
+    const ctx = document.getElementById('trendChart').getContext('2d');
+
+    if (trendChart) trendChart.destroy();
+
+    trendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.date.slice(5)),
+        datasets: [
+          {
+            label: '对话量',
+            data: data.map(d => d.conversations),
+            borderColor: COLORS.primary,
+            backgroundColor: COLORS.primaryLight,
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: data.length <= 14 ? 4 : 0,
+            pointHoverRadius: 5,
+          },
+          {
+            label: '消息数',
+            data: data.map(d => d.messages),
+            borderColor: COLORS.success,
+            backgroundColor: 'rgba(34,197,94,0.08)',
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { position: 'top', labels: { usePointStyle: true, padding: 16, font: { size: 12 } } },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const idx = items[0].dataIndex;
+                return ['独立访客: ' + data[idx].uniqueVisitors + '人', 'AI处理: ' + data[idx].aiHandled];
+              }
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#f0f0f0' } },
+          x: { ticks: { font: { size: 11 }, maxRotation: 45 }, grid: { display: false } }
+        }
+      }
+    });
+
+    // 更新模式饼图
+    updateModeChart(data);
+
+    // 更新满意度趋势
+    loadSatisfactionTrend(data);
+  } catch (e) {
+    console.error('趋势加载失败:', e);
+  }
+}
+
+function changeRange(btn, days) {
+  document.querySelectorAll('.tab-group .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trendDays = days;
+  loadTrend();
+}
+
+// ========== 处理方式饼图 ==========
+function updateModeChart(trendData) {
+  const totalAi = trendData.reduce((s, d) => s + (d.aiHandled || 0), 0);
+  const totalHuman = trendData.reduce((s, d) => s + (d.humanHandled || 0), 0);
+  const ctx = document.getElementById('modeChart').getContext('2d');
+
+  if (modeChart) modeChart.destroy();
+
+  modeChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['🤖 AI处理', '👤 人工处理'],
+      datasets: [{
+        data: [totalAi, totalHuman],
+        backgroundColor: [COLORS.primary, COLORS.purple],
+        borderWidth: 0,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'bottom', labels: { padding: 16, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const val = ctx.raw;
+              const total = totalAi + totalHuman;
+              return `${ctx.label}: ${val} (${total > 0 ? Math.round(val/total*100) : 0}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ========== 满意度分布 ==========
+async function loadSatisfaction() {
+  try {
+    const d = await apiFetch(API + '/satisfaction');
+    if (!d.success) return;
+    const data = d.data;
+
+    const ctx = document.getElementById('satisfactionChart').getContext('2d');
+    if (satisfactionChart) satisfactionChart.destroy();
+
+    satisfactionChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.distribution.map(x => x.label),
+        datasets: [{
+          label: '评价数量',
+          data: data.distribution.map(x => x.count),
+          backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#16a34a'],
+          borderRadius: 6,
+          barThickness: 28,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: () => `共 ${data.total} 条评价 · 平均 ${data.average.toFixed(1)} 分`,
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } }, grid: { color: '#f0f0f0' } },
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('满意度加载失败:', e);
+  }
+}
+
+// ========== 满意度趋势 ==========
+function loadSatisfactionTrend(trendData) {
+  const recentSat = trendData.slice(-14);
+  const ctx = document.getElementById('satTrendChart').getContext('2d');
+  if (satTrendChart) satTrendChart.destroy();
+
+  satTrendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: recentSat.map(d => d.date.slice(5)),
+      datasets: [{
+        label: '平均分',
+        data: recentSat.map(d => d.avgSatisfaction),
+        borderColor: COLORS.warning,
+        backgroundColor: 'rgba(245,158,11,0.1)',
+        fill: true,
+        tension: 0.35,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: COLORS.warning,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 5.1, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f0f0f0' } },
+        x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ========== 高频问题 ==========
+async function loadTopQuestions() {
+  try {
+    const d = await apiFetch(API + '/top-questions?limit=10');
+    if (!d.success) return;
+    const questions = d.data;
+    const totalQuestions = d.total;
+    const tbody = document.getElementById('top-questions-tbody');
+
+    if (questions.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><div class="icon">📭</div><p>暂无对话数据</p></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = questions.map(q => `
+      <tr>
+        <td><strong>${q.rank}</strong></td>
+        <td class="question-text" title="${escapeHtml(q.text).replace(/"/g, '&quot;')}">${escapeHtml(q.text)}</td>
+        <td><strong>${q.count}</strong> 次</td>
+        <td>${totalQuestions > 0 ? Math.round(q.count / totalQuestions * 100) : 0}%</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    console.error('高频问题加载失败:', e);
+  }
+}
+
+// ========== 会话列表 ==========
+async function loadConversations(page = 1) {
+  try {
+    const params = `page=${page}&pageSize=${PAGE_SIZE}${currentStatus ? '&status=' + currentStatus : ''}`;
+    const d = await apiFetch(API + '/conversations?' + params);
+    if (!d.success) return;
+
+    const convs = d.data;
+    const pg = d.pagination;
+    const tbody = document.getElementById('conversations-tbody');
+
+    if (convs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><div class="icon">📭</div><p>暂无会话数据</p></td></tr>';
+      document.getElementById('conv-pagination').innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = convs.map(c => {
+      const statusMap = { active: ['活跃中', 'active'], idle: ['空闲中', 'idle'], closed: ['已关闭', 'closed'] };
+      const modeMap = { ai: ['AI', 'ai'], human: ['人工', 'human'], queue: ['排队', 'queue'] };
+      const st = statusMap[c.status] || ['未知', ''];
+      const md = modeMap[c.mode] || ['未知', ''];
+
+      const stars = c.rating ? '★'.repeat(c.rating) + '☆'.repeat(5 - c.rating) : '-';
+      const createdTime = c.created_at ? new Date(c.created_at).toLocaleString('zh-CN') : '--';
+      const updateTime = c.updated_at ? new Date(c.updated_at).toLocaleString('zh-CN') : '--';
+
+      return `<tr>
+        <td>${escapeHtml(c.visitor_name || '访客')}</td>
+        <td><span class="badge badge-${st[1]}">${st[0]}</span></td>
+        <td><span class="badge badge-${md[1]}">${md[0]}</span></td>
+        <td>${c.messageCount || 0}</td>
+        <td><span class="score-stars" style="color:${c.rating >= 4 ? COLORS.success : c.rating >= 3 ? COLORS.warning : COLORS.gray}">${stars}</span></td>
+        <td style="white-space:nowrap;font-size:12px">${createdTime}</td>
+        <td style="white-space:nowrap;font-size:12px">${updateTime}</td>
+      </tr>`;
+    }).join('');
+
+    // 分页
+    renderPagination(pg, 'conv-pagination', loadConversations);
+  } catch (e) {
+    console.error('会话列表加载失败:', e);
+  }
+}
+
+function filterConv(btn, status) {
+  btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentStatus = status;
+  currentPage = 1;
+  loadConversations(1);
+}
+
+function renderPagination(pg, containerId, loadFn) {
+  const el = document.getElementById(containerId);
+  if (pg.totalPages <= 1) { el.innerHTML = ''; return; }
+
+  let html = '';
+  html += `<button class="page-btn" ${pg.page <= 1 ? 'disabled' : ''} onclick="${loadFn.name}(${pg.page - 1})">上一页</button>`;
+  
+  const start = Math.max(1, pg.page - 2);
+  const end = Math.min(pg.totalPages, pg.page + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i === pg.page ? 'active' : ''}" onclick="${loadFn.name}(${i})">${i}</button>`;
+  }
+
+  html += `<button class="page-btn" ${pg.page >= pg.totalPages ? 'disabled' : ''} onclick="${loadFn.name}(${pg.page + 1})">下一页</button>`;
+  html += `<span style="font-size:12px;color:var(--gray-400);margin-left:8px">共 ${pg.total} 条</span>`;
+
+  el.innerHTML = html;
+}
+
+// ========== 全部刷新 ==========
+async function refreshAll() {
+  document.getElementById('refresh-time').textContent = '刷新中...';
+  
+  // 先检查认证
+  const token = getAuthHeader();
+  if (!token) {
+    showLoginForm();
+    document.getElementById('refresh-time').textContent = '需要登录';
+    return;
+  }
+
+  try {
+    await Promise.all([
+      loadOverview(),
+      loadTrend(),
+      loadSatisfaction(),
+      loadTopQuestions(),
+      loadConversations(currentPage),
+    ]);
+    document.getElementById('refresh-time').textContent = '最后更新：' + new Date().toLocaleTimeString('zh-CN');
+  } catch (e) {
+    console.error('数据加载出错:', e);
+    document.getElementById('refresh-time').textContent = '加载失败: ' + e.message;
+  }
+}
+
+// ========== 启动 ==========
+function checkLoginState() {
+  const savedToken = localStorage.getItem('authHeader');
+  if (!savedToken) {
+    showLoginForm();
+  } else {
+    authHeader = savedToken;
+    refreshAll();
+  }
+}
+
+// 页面加载时检查
+checkLoginState();
+
+// 从缓存恢复时（比如从管理后台返回），重新检查登录状态
+window.addEventListener('pageshow', function(event) {
+  // event.persisted === true 表示从 bfcache 恢复
+  checkLoginState();
+});
+</script>
+</body>
+</html>

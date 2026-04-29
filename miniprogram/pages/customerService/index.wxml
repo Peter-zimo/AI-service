@@ -1,0 +1,160 @@
+<!--pages/customerService/index.wxml-->
+<view class="container">
+
+  <!-- 顶部导航栏 -->
+  <view class="nav-bar">
+    <view class="nav-title">
+      <image class="nav-avatar" src="/images/robot.png" mode="aspectFill" />
+      <view class="nav-info">
+        <text class="nav-name">智能客服</text>
+        <text class="nav-status {{isConnected ? 'online' : 'offline'}}">
+          {{isConnected ? '在线' : '连接中...'}}
+        </text>
+      </view>
+    </view>
+    <view class="nav-actions">
+      <text class="btn-refresh" bindtap="onRefresh">刷新</text>
+    </view>
+  </view>
+
+  <!-- 消息区域 -->
+  <scroll-view
+    class="message-list"
+    scroll-y
+    scroll-into-view="{{scrollToId}}"
+    scroll-with-animation
+    enable-back-to-top
+  >
+    <!-- 欢迎语 -->
+    <view class="welcome-card">
+      <image class="welcome-avatar" src="/images/robot.png" mode="aspectFill" />
+      <view class="welcome-content">
+        <text class="welcome-title">你好！我是AI智能客服 👋</text>
+        <text class="welcome-desc">有什么可以帮助您的？</text>
+      </view>
+    </view>
+
+    <!-- 快捷提问 -->
+    <view class="quick-questions" wx:if="{{hotQuestions.length > 0 && messages.length === 0}}">
+      <text class="quick-title">常见问题</text>
+      <view class="quick-list">
+        <view
+          class="quick-item"
+          wx:for="{{hotQuestions}}"
+          wx:key="id"
+          bindtap="onQuickAsk"
+          data-question="{{item.question}}"
+        >
+          <text class="quick-icon">💬</text>
+          <text class="quick-text">{{item.question}}</text>
+          <text class="quick-arrow">›</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 消息列表 -->
+    <view class="message-items">
+      <view
+        wx:for="{{messages}}"
+        wx:key="id"
+        id="msg-{{item.id}}"
+        class="message-item {{item.role === 'user' ? 'user-msg' : 'bot-msg'}}"
+      >
+        <!-- 机器人头像 -->
+        <image
+          wx:if="{{item.role === 'assistant'}}"
+          class="msg-avatar bot-avatar"
+          src="/images/robot.png"
+          mode="aspectFill"
+        />
+
+        <view class="msg-bubble-wrap">
+          <!-- 消息气泡 -->
+          <view class="msg-bubble {{item.role === 'user' ? 'bubble-user' : 'bubble-bot'}}">
+            <text class="msg-text" user-select>{{item.content}}</text>
+          </view>
+          <!-- 消息时间 -->
+          <text class="msg-time">{{item.timeStr}}</text>
+
+          <!-- 来自知识库的标签 -->
+          <view class="msg-tag" wx:if="{{item.role === 'assistant' && item.type === 'knowledge'}}">
+            <text class="tag-text">📚 知识库解答</text>
+          </view>
+
+          <!-- 转人工按钮 -->
+          <view class="human-service-btn" wx:if="{{item.showHumanBtn}}" bindtap="onTransferHuman">
+            <text>转接人工客服 →</text>
+          </view>
+        </view>
+
+        <!-- 用户头像 -->
+        <image
+          wx:if="{{item.role === 'user'}}"
+          class="msg-avatar user-avatar"
+          src="{{userAvatar}}"
+          mode="aspectFill"
+        />
+      </view>
+
+      <!-- 打字动画 -->
+      <view class="message-item bot-msg" wx:if="{{isTyping}}">
+        <image class="msg-avatar bot-avatar" src="/images/robot.png" mode="aspectFill" />
+        <view class="msg-bubble bubble-bot typing-bubble">
+          <view class="typing-dots">
+            <view class="dot dot1"></view>
+            <view class="dot dot2"></view>
+            <view class="dot dot3"></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 锚点（用于滚动到底部） -->
+      <view id="msg-bottom"></view>
+    </view>
+  </scroll-view>
+
+  <!-- 底部输入区域 -->
+  <view class="input-bar" wx:if="{{!showRating}}">
+    <textarea
+      class="input-box"
+      placeholder="输入问题，Enter发送..."
+      value="{{inputText}}"
+      bindinput="onInput"
+      bindconfirm="onSend"
+      auto-height
+      maxlength="500"
+      confirm-type="send"
+      adjust-position
+    />
+    <view
+      class="send-btn {{inputText.trim() ? 'active' : ''}}"
+      bindtap="onSend"
+    >
+      <text>发送</text>
+    </view>
+  </view>
+
+  <!-- 评价区域 -->
+  <view class="rating-bar" wx:if="{{showRating}}">
+    <text class="rating-title">本次服务如何？</text>
+    <view class="stars">
+      <text
+        wx:for="{{[1,2,3,4,5]}}"
+        wx:key="*this"
+        class="star {{ratingScore >= item ? 'active' : ''}}"
+        bindtap="onStarTap"
+        data-score="{{item}}"
+      >★</text>
+    </view>
+    <view class="rating-actions">
+      <view class="btn-skip" bindtap="onSkipRating">跳过</view>
+      <view class="btn-submit {{ratingScore > 0 ? 'active' : ''}}" bindtap="onSubmitRating">提交评价</view>
+    </view>
+  </view>
+
+  <!-- 结束对话按钮 -->
+  <view class="end-bar" wx:if="{{messages.length > 0 && !showRating}}">
+    <text class="btn-end" bindtap="onEndConversation">结束对话并评价</text>
+  </view>
+
+</view>

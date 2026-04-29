@@ -1,0 +1,50 @@
+# AI智能客服系统 - Docker Compose 一键部署
+#
+# 使用方法：
+#   docker compose up -d          # 后台启动
+#   docker compose down            # 停止
+#   docker compose logs -f         # 查看日志
+#   docker compose restart         # 重启
+
+services:
+  ai-customer-service:
+    build: .
+    container_name: ai-customer-service
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3456}:3456"
+    environment:
+      - NODE_ENV=production
+      - PORT=3456
+      # Basic Auth（可覆盖）
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-CHANGE_ME_FIRST}
+      # AI服务配置（可选，用于对接外部AI API）
+      # - AI_API_KEY=${AI_API_KEY}
+      # - AI_MODEL=${AI_MODEL:-glm-4-flash}
+    volumes:
+      # 数据持久化：品牌配置、知识库等数据文件不会因容器重建丢失
+      - app-data:/app/server/data
+      # 日志（可选挂载到宿主机查看）
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3456/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ai-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  app-data:
+    name: ai-customer-data
+
+networks:
+  ai-network:
+    name: ai-customer-net

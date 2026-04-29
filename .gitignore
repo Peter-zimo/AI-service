@@ -1,0 +1,38 @@
+# 依赖
+node_modules/
+
+# 环境变量（包含API Key等敏感信息）
+.env
+.env.local
+.env.production
+
+# 数据文件（SQLite数据库、客服账号、敏感词库等）
+server/data/
+
+# 日志
+logs/
+*.log
+
+# 上传临时文件
+uploads/
+
+# PM2
+.pm2/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 备份归档
+archive/
+
+# 知识库临时导出
+*.xlsx
+*.csv
+!server/data/

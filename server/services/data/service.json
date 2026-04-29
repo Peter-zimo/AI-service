@@ -1,0 +1,56 @@
+{
+  "conversations": [
+    {
+      "id": "1ca4f8d1-2b8c-4180-bd22-58d3dc142516",
+      "visitor_id": "v_1776357896271_5m2ieajt7",
+      "visitor_name": "访客",
+      "created_at": "2026-04-16T16:45:35.659Z",
+      "updated_at": "2026-04-16T16:45:45.505Z",
+      "status": "active"
+    }
+  ],
+  "messages": [
+    {
+      "id": "806490ae-0e71-4050-a41d-97665c590504",
+      "conversation_id": "1ca4f8d1-2b8c-4180-bd22-58d3dc142516",
+      "role": "user",
+      "content": "女生",
+      "ai_confidence": null,
+      "created_at": "2026-04-16T16:45:35.671Z"
+    },
+    {
+      "id": "57be2fc5-c024-4197-9ba7-5dd046aa0775",
+      "conversation_id": "1ca4f8d1-2b8c-4180-bd22-58d3dc142516",
+      "role": "assistant",
+      "content": "感谢您的提问！我已收到您的问题。\n\n为了更好地帮助您，建议您：\n1. 尝试描述更详细的问题\n2. 查看常见问题分类\n3. 输入\"转人工\"联系真人客服\n\n我们会不断学习，为您提供更准确的答案~",
+      "ai_confidence": 0.5,
+      "created_at": "2026-04-16T16:45:35.675Z"
+    },
+    {
+      "id": "96149d77-1db3-4202-bf98-46f2da7d10f9",
+      "conversation_id": "1ca4f8d1-2b8c-4180-bd22-58d3dc142516",
+      "role": "user",
+      "content": "你是谁",
+      "ai_confidence": null,
+      "created_at": "2026-04-16T16:45:45.503Z"
+    },
+    {
+      "id": "ad6ea216-fd53-42f3-9ae5-1b9693ac840f",
+      "conversation_id": "1ca4f8d1-2b8c-4180-bd22-58d3dc142516",
+      "role": "assistant",
+      "content": "感谢您的提问！我已收到您的问题。\n\n为了更好地帮助您，建议您：\n1. 尝试描述更详细的问题\n2. 查看常见问题分类\n3. 输入\"转人工\"联系真人客服\n\n我们会不断学习，为您提供更准确的答案~",
+      "ai_confidence": 0.5,
+      "created_at": "2026-04-16T16:45:45.505Z"
+    }
+  ],
+  "ratings": [],
+  "stats": [
+    {
+      "date": "2026-04-16",
+      "total_conversations": 1,
+      "total_messages": 2,
+      "ai_handled": 0,
+      "satisfaction_score": 0
+    }
+  ]
+}

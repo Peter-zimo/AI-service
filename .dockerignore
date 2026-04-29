@@ -1,0 +1,49 @@
+# 依赖目录（Docker镜像中重新安装）
+node_modules
+npm-debug.log*
+
+# Git
+.git
+.gitignore
+
+# 开发文件
+.env
+.env.*
+!.env.example
+!.env.production
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# 文档和备份
+*.md
+!README.md
+*.bak
+*.backup
+
+# 测试文件
+test
+tests
+coverage
+
+# Docker相关（不需要）
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# 日志和临时文件
+logs
+*.log
+tmp
+temp
+
+# 工作目录文件
+.workbuddy
+archive
+
+# 其他
+.DS_Store
+Thumbs.db

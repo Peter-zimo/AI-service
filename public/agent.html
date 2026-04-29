@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>客服工作台 - AI智能客服系统</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Noto Sans SC', sans-serif; background: #f0f2f5; min-height: 100vh; }
+    
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    
+    /* 头部 */
+    .header { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; padding: 20px 30px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header-info { display: flex; align-items: center; gap: 20px; }
+    .agent-status { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .status-dot.online { background: #22c55e; }
+    .status-dot.busy { background: #f59e0b; }
+    .status-dot.offline { background: #9ca3af; }
+    
+    /* 主布局 */
+    .main { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+    
+    /* 侧边栏 */
+    .sidebar { background: #fff; border-radius: 12px; padding: 20px; }
+    .sidebar h3 { font-size: 14px; color: #6b7280; margin-bottom: 15px; text-transform: uppercase; }
+    
+    .stat-card { background: #f8fafc; border-radius: 8px; padding: 15px; margin-bottom: 12px; }
+    .stat-value { font-size: 24px; font-weight: 600; color: #1f2937; }
+    .stat-label { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-family: inherit; transition: all 0.15s; margin-bottom: 10px; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-success { background: #22c55e; color: #fff; }
+    .btn-success:hover { background: #16a34a; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    /* 聊天区域 */
+    .chat-area { background: #fff; border-radius: 12px; display: flex; flex-direction: column; height: calc(100vh - 140px); }
+    .chat-header { padding: 15px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+    .chat-header h3 { font-size: 16px; color: #1f2937; }
+    .visitor-info { font-size: 13px; color: #6b7280; }
+    
+    .messages { flex: 1; overflow-y: auto; padding: 20px; background: #f8fafc; }
+    .msg { display: flex; gap: 10px; margin-bottom: 15px; }
+    .msg.visitor { flex-direction: row-reverse; }
+    .msg-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; background: #e5e7eb; }
+    .msg-body { max-width: 70%; }
+    .bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-break: break-all; }
+    .bubble.visitor { background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
+    .bubble.agent { background: #fff; color: #1f2937; border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; }
+    .msg-meta { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+    .msg.visitor .msg-meta { text-align: right; }
+    
+    .input-area { padding: 15px 20px; border-top: 1px solid #e5e7eb; display: flex; gap: 10px; }
+    .msg-input { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; font-size: 14px; font-family: inherit; resize: none; outline: none; }
+    .msg-input:focus { border-color: #2563eb; }
+    .send-btn { padding: 10px 24px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    .send-btn:hover { background: #1d4ed8; }
+    .send-btn:disabled { background: #bfdbfe; cursor: not-allowed; }
+    
+    /* 登录框 */
+    .login-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .login-box { background: #fff; border-radius: 16px; padding: 40px; width: 400px; text-align: center; }
+    .login-box h2 { font-size: 24px; margin-bottom: 8px; }
+    .login-box p { color: #6b7280; margin-bottom: 24px; }
+    .form-group { margin-bottom: 16px; text-align: left; }
+    .form-group label { display: block; font-size: 14px; color: #374151; margin-bottom: 6px; }
+    .form-group input { width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
+    .form-group input:focus { border-color: #2563eb; outline: none; }
+    
+    /* 空状态 */
+    .empty-state { text-align: center; padding: 60px 20px; color: #9ca3af; }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+    
+    /* 队列列表 */
+    .queue-list { max-height: 200px; overflow-y: auto; }
+    .queue-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8fafc; border-radius: 6px; margin-bottom: 8px; font-size: 13px; }
+    .queue-item .position { background: #2563eb; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+    
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <!-- 登录框 -->
+  <div id="login-overlay" class="login-overlay">
+    <div class="login-box">
+      <h2>👩‍💼 客服登录</h2>
+      <p>请输入您的工号和密码</p>
+      <div class="form-group">
+        <label>工号</label>
+        <input type="text" id="agent-id" placeholder="例如：agent_001" value="agent_001">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="agent-password" placeholder="请输入密码" value="" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" onclick="login()">登录</button>
+      <p id="login-error" style="color: #ef4444; margin-top: 12px; font-size: 13px;"></p>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 头部 -->
+    <div class="header">
+      <h1>🎧 客服工作台</h1>
+      <div class="header-info">
+        <div class="agent-status">
+          <span class="status-dot offline" id="status-dot"></span>
+          <span id="agent-name">未登录</span>
+          <span id="status-text">离线</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="main">
+      <!-- 侧边栏 -->
+      <div class="sidebar">
+        <h3>今日统计</h3>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-served">0</div>
+          <div class="stat-label">已服务会话</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-queue">0</div>
+          <div class="stat-label">当前排队</div>
+        </div>
+        
+        <h3 style="margin-top: 20px;">状态控制</h3>
+        <button class="btn btn-success" id="btn-online" onclick="goOnline()">上线</button>
+        <button class="btn btn-danger" id="btn-offline" onclick="goOffline()" disabled>下线</button>
+        <button class="btn btn-primary" id="btn-end" onclick="endConversation()" disabled>结束当前会话</button>
+        
+        <h3 style="margin-top: 20px;">排队列表</h3>
+        <div class="queue-list" id="queue-list">
+          <div class="empty-state" style="padding: 20px;">暂无排队</div>
+        </div>
+      </div>
+
+      <!-- 聊天区域 -->
+      <div class="chat-area">
+        <div class="chat-header">
+          <div>
+            <h3 id="chat-title">当前无会话</h3>
+            <div class="visitor-info" id="visitor-info">请先上线等待分配会话</div>
+          </div>
+        </div>
+        
+        <div class="messages" id="messages">
+          <div class="empty-state">
+            <div class="empty-state-icon">💬</div>
+            <p>登录并上线后，会话将自动分配给您</p>
+          </div>
+        </div>
+        
+        <div class="input-area">
+          <textarea class="msg-input" id="msg-input" rows="2" placeholder="输入回复..." onkeydown="handleKey(event)" disabled></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // API 地址：生产环境优先用 VITE_API_URL，否则自动检测当前 host
+    const API = ((window.__ENV__ && window.__ENV__.VITE_API_URL) || window.location.origin) + '/api';
+    let agentId = null;
+    let agentInfo = null;
+    let currentConversationId = null;
+    let ws = null;
+    let statusCheckTimer = null;
+    let loginFailCount = 0;       // 登录失败计数
+    const LOGIN_MAX_FAIL = 5;     // 连续失败5次后锁定
+    let loginLockedUntil = 0;     // 锁定截止时间戳
+
+    // 调试日志（仅开发环境输出）
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    function log(...args) { if (isDev) console.log(...args); }
+    function logErr(...args) { if (isDev) console.error(...args); }
+
+    // 获取认证头
+    function getAuthHeader() {
+      const stored = localStorage.getItem('authHeader');
+      return stored || '';
+    }
+
+    // 带认证的 fetch
+    async function authFetch(url, options = {}) {
+      const auth = getAuthHeader();
+      const headers = { ...options.headers, 'Content-Type': 'application/json' };
+      if (auth) headers['Authorization'] = auth;
+      return fetch(url, { ...options, headers });
+    }
+
+    // 登录
+    async function login() {
+      // 检查是否被锁定
+      if (Date.now() < loginLockedUntil) {
+        const remainSec = Math.ceil((loginLockedUntil - Date.now()) / 1000);
+        document.getElementById('login-error').textContent = `登录失败次数过多，请 ${remainSec} 秒后再试`;
+        return;
+      }
+
+      const id = document.getElementById('agent-id').value.trim();
+      const password = document.getElementById('agent-password').value;
+      
+      if (!id || !password) {
+        document.getElementById('login-error').textContent = '请输入工号和密码';
+        return;
+      }
+      
+      const loginBtn = document.querySelector('.login-box .btn-primary');
+      loginBtn.disabled = true;
+      loginBtn.textContent = '登录中...';
+      
+      try {
+        const r = await authFetch(API + '/human/login', {
+          method: 'POST',
+          body: JSON.stringify({ agentId: id, password })
+        });
+        const d = await r.json();
+        
+        if (d.success) {
+          loginFailCount = 0; // 登录成功，重置计数
+          agentId = d.agent.id;
+          agentInfo = d.agent;
+          document.getElementById('login-overlay').classList.add('hidden');
+          document.getElementById('agent-name').textContent = d.agent.name;
+          updateStatusDisplay('offline');
+          
+          // 连接WebSocket
+          connectWebSocket();
+          // 启动状态检查
+          startStatusCheck();
+        } else {
+          loginFailCount++;
+          document.getElementById('login-error').textContent = d.error || '登录失败';
+
+          if (loginFailCount >= LOGIN_MAX_FAIL) {
+            // 锁定60秒
+            loginLockedUntil = Date.now() + 60000;
+            document.getElementById('login-error').textContent = `已连续失败 ${loginFailCount} 次，请60秒后再试`;
+            // 启动倒计时
+            const countdown = setInterval(() => {
+              const remain = Math.ceil((loginLockedUntil - Date.now()) / 1000);
+              if (remain <= 0) {
+                clearInterval(countdown);
+                loginFailCount = 0;
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登录';
+                document.getElementById('login-error').textContent = '';
+              } else {
+                document.getElementById('login-error').textContent = `请 ${remain} 秒后再试`;
+              }
+            }, 1000);
+          }
+        }
+      } catch(e) {
+        document.getElementById('login-error').textContent = '网络错误，请重试';
+      } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = '登录';
+      }
+    }
+
+    // 连接WebSocket
+    function connectWebSocket() {
+      if (!agentId || ws) return;
+      
+      // 【修复】动态检测 WebSocket 协议和地址
+      const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = location.host;
+      const wsUrl = wsProtocol + '//' + wsHost + '/ws?type=agent&id=' + encodeURIComponent(agentId);
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        log('[WebSocket] 已连接');
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleWebSocketMessage(msg);
+        } catch(e) {
+          logErr('[WebSocket] 消息解析失败:', e);
+        }
+      };
+      
+      ws.onclose = () => {
+        log('[WebSocket] 连接关闭');
+        ws = null;
+        // 尝试重连
+        setTimeout(() => connectWebSocket(), 3000);
+      };
+      
+      ws.onerror = (err) => {
+        logErr('[WebSocket] 错误:', err);
+      };
+    }
+
+    // 处理WebSocket消息
+    function handleWebSocketMessage(msg) {
+      switch(msg.type) {
+        case 'new_conversation':
+          currentConversationId = msg.conversationId;
+          loadConversation(msg.conversationId).then(() => {
+            // 自动发送自我介绍给访客
+            const intro = `您好，我是客服${agentInfo?.name || '客服'}，很高兴为您服务！请问有什么可以帮您的？`;
+            const introInput = document.getElementById('msg-input');
+            introInput.value = intro;
+            sendMessage();
+          });
+          updateStatusDisplay('busy');
+          break;
+        case 'user_message':
+          if (msg.conversationId === currentConversationId) {
+            appendMessage('visitor', msg.message, msg.timestamp);
+          }
+          break;
+      }
+    }
+
+    // 上线
+    async function goOnline() {
+      if (!agentId) return;
+      
+      try {
+        const r = await authFetch(API + '/human/online', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId })
+        });
+        const d = await r.json();
+        
+        if (d.success) {
+          agentInfo = d.agent;
+          updateStatusDisplay('online');
+        }
+      } catch(e) {
+        logErr('上线失败:', e);
+      }
+    }
+
+    // 下线
+    async function goOffline() {
+      if (!agentId) return;
+      
+      try {
+        const r = await authFetch(API + '/human/offline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId })
+        });
+        const d = await r.json();
+        
+        if (d.success) {
+          currentConversationId = null;
+          updateStatusDisplay('offline');
+          clearMessages();
+        }
+      } catch(e) {
+        logErr('下线失败:', e);
+      }
+    }
+
+    // 结束会话
+    async function endConversation() {
+      if (!agentId || !currentConversationId) return;
+      
+      try {
+        const r = await authFetch(API + '/human/end-conversation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId, conversationId: currentConversationId })
+        });
+        const d = await r.json();
+        
+        if (d.success) {
+          currentConversationId = null;
+          updateStatusDisplay('online');
+          clearMessages();
+        }
+      } catch(e) {
+        logErr('结束会话失败:', e);
+      }
+    }
+
+    // 发送消息
+    async function sendMessage() {
+      const input = document.getElementById('msg-input');
+      const text = input.value.trim();
+      if (!text || !currentConversationId) return;
+      
+      try {
+        const r = await authFetch(API + '/human/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId, conversationId: currentConversationId, message: text })
+        });
+        const d = await r.json();
+        
+        if (d.success) {
+          appendMessage('agent', text, new Date().toISOString());
+          input.value = '';
+        }
+      } catch(e) {
+        logErr('发送消息失败:', e);
+      }
+    }
+
+    // 加载会话
+    async function loadConversation(conversationId) {
+      try {
+        const r = await authFetch(API + '/human/history/' + conversationId);
+        const d = await r.json();
+        
+        if (d.success) {
+          document.getElementById('chat-title').textContent = '会话：' + conversationId.slice(0, 8);
+          document.getElementById('visitor-info').textContent = '访客：' + (d.conversation.visitorName || '匿名');
+          
+          // 显示历史消息
+          const container = document.getElementById('messages');
+          container.innerHTML = '';
+          
+          d.messages.forEach(msg => {
+            if (msg.role === 'user') {
+              appendMessage('visitor', msg.content, msg.created_at);
+            } else if (msg.role === 'agent') {
+              appendMessage('agent', msg.content, msg.created_at);
+            } else if (msg.role === 'assistant') {
+              appendMessage('bot', msg.content, msg.created_at);
+            }
+          });
+          
+          // 启用输入
+          document.getElementById('msg-input').disabled = false;
+          document.getElementById('send-btn').disabled = false;
+        }
+      } catch(e) {
+        logErr('加载会话失败:', e);
+      }
+    }
+
+    // 添加消息到界面
+    function appendMessage(role, text, timestamp) {
+      const container = document.getElementById('messages');
+      const time = new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      
+      let avatar = '👤';
+      let bubbleClass = 'visitor';
+      
+      if (role === 'agent') {
+        avatar = agentInfo?.avatar || '👩';
+        bubbleClass = 'agent';
+      } else if (role === 'bot') {
+        avatar = '🤖';
+        bubbleClass = 'agent';
+      }
+      
+      const html = `
+        <div class="msg ${role === 'visitor' ? 'visitor' : ''}">
+          <div class="msg-avatar">${avatar}</div>
+          <div class="msg-body">
+            <div class="bubble ${bubbleClass}">${escapeHtml(text)}</div>
+            <div class="msg-meta">${time}</div>
+          </div>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', html);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // 清空消息
+    function clearMessages() {
+      document.getElementById('messages').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">💬</div>
+          <p>等待新会话分配...</p>
+        </div>
+      `;
+      document.getElementById('chat-title').textContent = '当前无会话';
+      document.getElementById('visitor-info').textContent = '请先上线等待分配会话';
+      document.getElementById('msg-input').disabled = true;
+      document.getElementById('send-btn').disabled = true;
+    }
+
+    // 更新状态显示
+    function updateStatusDisplay(status) {
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('status-text');
+      const btnOnline = document.getElementById('btn-online');
+      const btnOffline = document.getElementById('btn-offline');
+      const btnEnd = document.getElementById('btn-end');
+      
+      dot.className = 'status-dot ' + status;
+      
+      switch(status) {
+        case 'online':
+          text.textContent = '在线';
+          btnOnline.disabled = true;
+          btnOffline.disabled = false;
+          btnEnd.disabled = true;
+          break;
+        case 'busy':
+          text.textContent = '处理中';
+          btnOnline.disabled = true;
+          btnOffline.disabled = false;
+          btnEnd.disabled = false;
+          break;
+        case 'offline':
+          text.textContent = '离线';
+          btnOnline.disabled = false;
+          btnOffline.disabled = true;
+          btnEnd.disabled = true;
+          break;
+      }
+    }
+
+    // 检查状态
+    async function checkStatus() {
+      if (!agentId) return;
+      
+      try {
+        // 获取客服信息
+        const r = await authFetch(API + '/human/agent/' + agentId);
+        const d = await r.json();
+        
+        if (d.success) {
+          document.getElementById('stat-served').textContent = d.agent.totalServed;
+          
+          // 如果客服正在处理会话但前端不知道
+          if (d.agent.currentConversation && !currentConversationId) {
+            currentConversationId = d.agent.currentConversation;
+            loadConversation(currentConversationId);
+            updateStatusDisplay('busy');
+          }
+        }
+        
+        // 获取队列信息
+        const qr = await authFetch(API + '/human/queue');
+        const qd = await qr.json();
+        
+        if (qd.success) {
+          document.getElementById('stat-queue').textContent = qd.queue.length;
+          updateQueueList(qd.queue.items);
+        }
+      } catch(e) {
+        logErr('状态检查失败:', e);
+      }
+    }
+
+    // 更新队列列表
+    function updateQueueList(items) {
+      const container = document.getElementById('queue-list');
+      
+      if (items.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding: 20px;">暂无排队</div>';
+        return;
+      }
+      
+      container.innerHTML = items.map(item => `
+        <div class="queue-item">
+          <span>访客 ${esc(item.conversationId.slice(0, 8))}</span>
+          <span class="position">第${esc(item.position)}位</span>
+        </div>
+      `).join('');
+    }
+
+    // 启动状态检查
+    function startStatusCheck() {
+      checkStatus();
+      statusCheckTimer = setInterval(checkStatus, 5000);
+    }
+
+    // 键盘事件
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    // HTML转义
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    const esc = escapeHtml; // XSS防护别名
+  </script>
+</body>
+</html>
