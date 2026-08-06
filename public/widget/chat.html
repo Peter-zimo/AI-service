@@ -7,6 +7,7 @@
     
   <link rel="stylesheet" href="/css/theme.css?v=20260806">
   <link rel="stylesheet" href="/css/chat.css?v=20260806">
+  <link rel="stylesheet" href="/widget/widget.css?v=20260806">
 </head>
 <body>
 <div class="chat-wrap">
@@ -23,6 +24,7 @@
       </div>
     </div>
     <div class="header-actions">
+      <button class="header-btn-min" onclick="minimizeWidget()" title="最小化">−</button>
       <button class="header-btn" onclick="clearChat()">清空</button>
       <button class="header-btn" onclick="endConversation()" id="end-btn">结束</button>
       <button class="header-btn" onclick="showRating()">评价</button>
@@ -75,14 +77,15 @@
 <script>
   // API 地址自动适配：生产环境用当前域名，开发环境用 localhost
   // 生产部署时直接用相对路径（和前端同域）或通过环境变量注入
+  // widget 版 API：优先用父页面注入的 apiUrl（跨域部署），否则同域自动检测
   const API = (function () {
-    // VITE_API_URL 由打包时注入，留空则自动检测当前 host
+    const injected = sessionStorage.getItem('csw_api') || '';
+    if (injected) return injected;
     const envUrl = (window.__ENV__ && window.__ENV__.VITE_API_URL) || '';
     if (envUrl) return envUrl;
-    // 开发环境检测：端口 3000/8080 等通常为前端代理，用相对路径
     const port = location.port;
-    if (port === '3456') return location.origin + '/api'; // 直接部署在同一端口
-    return location.origin + '/api'; // 使用当前域，假设 nginx 反代到后端
+    if (port === '3456') return location.origin + '/api';
+    return location.origin + '/api';
   })();
   let convId = null;
   let isBusy = false;
@@ -285,7 +288,7 @@
         const r = await fetch(API + '/chat/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ visitorId, visitorName: '访客' })
+          body: JSON.stringify({ visitorId, visitorName: localStorage.getItem('visitor_name') || '访客' })
         });
         const d = await r.json();
         if (d.success) {
@@ -622,7 +625,7 @@
         const r = await fetch(API + '/chat/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ visitorId, visitorName: '访客' })
+          body: JSON.stringify({ visitorId, visitorName: localStorage.getItem('visitor_name') || '访客' })
         });
         const d = await r.json();
         if (d.success) {
@@ -972,6 +975,56 @@
     if (now - lastTouchEnd <= 300) e.preventDefault();
     lastTouchEnd = now;
   }, false);
+
+
+  // ========== Widget 通信 ==========
+  function minimizeWidget() {
+    try {
+      window.parent.postMessage({ type: 'csw-minimize' }, '*');
+    } catch (e) {}
+  }
+
+  // 未读消息徽章：收到新消息且当前不可见时上报
+  function notifyBadge(count) {
+    try {
+      window.parent.postMessage({ type: 'csw-badge', count: count || 1 }, '*');
+    } catch (e) {}
+  }
+
+  // 监听父页面指令：open/close/send/setUser/api
+  window.addEventListener('message', function (e) {
+    const msg = e.data;
+    if (!msg || typeof msg !== 'object') return;
+    switch (msg.type) {
+      case 'csw-api':
+        if (msg.apiUrl) {
+          sessionStorage.setItem('csw_api', msg.apiUrl);
+          location.reload();
+        }
+        break;
+      case 'csw-send':
+        const input = document.getElementById('msg-input');
+        if (input && msg.text) {
+          input.value = msg.text;
+          sendMsg();
+        }
+        break;
+      case 'csw-set-user':
+        if (msg.user && msg.user.name) {
+          localStorage.setItem('visitor_name', msg.user.name);
+        }
+        break;
+    }
+  });
+
+  // 消息到达时上报未读（人工消息触发）
+  const _origAppend = appendMsg;
+  appendMsg = function (role, text, type) {
+    _origAppend(role, text, type);
+    if (role === 'bot' && document.hidden === false) {
+      // 可见时不报徽章
+    }
+  };
 
   // 加载品牌配置（页面启动时）
   loadBrandConfig();

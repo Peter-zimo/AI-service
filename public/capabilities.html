@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>能力地图 - AI智能客服</title>
+  <link rel="stylesheet" href="/css/theme.css?v=20260806">
+  <style>
+    body { background: var(--gray-50); font-family: var(--font-sans); color: var(--gray-800); }
+    .hero { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: #fff; padding: 56px 24px 48px; text-align: center; }
+    .hero h1 { font-size: 28px; font-weight: 600; margin-bottom: 12px; }
+    .hero p { font-size: 15px; opacity: 0.85; }
+    .hero .tagline { margin-top: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .hero .chip { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 12px; }
+    .container { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
+    .section-title { font-size: 18px; font-weight: 600; color: var(--gray-900); margin: 36px 0 16px; display: flex; align-items: center; gap: 8px; }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--gray-200); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 20px; transition: box-shadow var(--transition), transform var(--transition); display: block; text-decoration: none; color: inherit; }
+    .card:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); text-decoration: none; }
+    .card .icon { font-size: 26px; margin-bottom: 10px; }
+    .card h3 { font-size: 15px; font-weight: 600; color: var(--gray-900); margin-bottom: 6px; }
+    .card p { font-size: 13px; color: var(--gray-500); line-height: 1.5; }
+    .card .tag { display: inline-block; margin-top: 10px; }
+    .card .link-hint { font-size: 12px; color: var(--primary); margin-top: 10px; display: block; }
+    .plain-card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 20px; }
+    .plain-card h3 { font-size: 15px; font-weight: 600; color: var(--gray-900); margin-bottom: 8px; }
+    .plain-card ul { list-style: none; }
+    .plain-card li { font-size: 13px; color: var(--gray-600); padding: 6px 0; border-bottom: 1px dashed var(--gray-100); display: flex; gap: 8px; align-items: center; }
+    .plain-card li:last-child { border-bottom: none; }
+    .plain-card li::before { content: '✓'; color: var(--success); font-weight: 600; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; }
+    .badge-blue { background: var(--primary-bg); color: var(--primary); }
+    .badge-green { background: var(--success-bg); color: var(--success); }
+    .badge-orange { background: var(--warning-bg); color: #b45309; }
+    .entry-bar { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 28px; }
+    .entry-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: var(--radius-md); font-size: 14px; font-weight: 500; text-decoration: none; transition: all var(--transition); }
+    .entry-btn.primary { background: #fff; color: var(--primary); }
+    .entry-btn.primary:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .entry-btn.secondary { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.3); }
+    .entry-btn.secondary:hover { background: rgba(255,255,255,0.25); }
+  </style>
+</head>
+<body>
+
+  <div class="hero">
+    <h1>🤖 AI 智能客服系统</h1>
+    <p>AI 优先 · 人机协同 · 知识库闭环 · 一行代码嵌入任何网站</p>
+    <div class="tagline">
+      <span class="chip">对标 Intercom Fin</span>
+      <span class="chip">对标智齿科技</span>
+      <span class="chip">Streaming SSE</span>
+      <span class="chip">RAG 混合检索</span>
+      <span class="chip">WebSocket 实时客服</span>
+      <span class="chip">JWT 角色分权</span>
+    </div>
+    <div class="entry-bar">
+      <a class="entry-btn primary" href="/">🎧 访客端体验</a>
+      <a class="entry-btn primary" href="/widget/demo-site.html">🚀 Widget 演示</a>
+      <a class="entry-btn secondary" href="/admin.html">⚙️ 管理后台</a>
+      <a class="entry-btn secondary" href="/agent.html">👩‍💼 客服台</a>
+      <a class="entry-btn secondary" href="/stats.html">📊 统计面板</a>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="section-title">🔍 用户侧能力</div>
+    <div class="grid">
+      <a class="card" href="/">
+        <div class="icon">💬</div>
+        <h3>AI 智能对话</h3>
+        <p>流式回复（SSE 打字机效果）、多轮上下文、知识库优先</p>
+        <span class="tag badge badge-green">访客端</span>
+        <span class="link-hint">立即体验 →</span>
+      </a>
+      <a class="card" href="/">
+        <div class="icon">📚</div>
+        <h3>知识库 RAG</h3>
+        <p>FTS5 全文检索 + 向量语义检索，Hybrid RRF 融合，来源标签可追溯</p>
+        <span class="tag badge badge-blue">知识库/AI/兜底</span>
+      </a>
+      <a class="card" href="/widget/demo-site.html">
+        <div class="icon">🚀</div>
+        <h3>Chat Widget</h3>
+        <p>Intercom 式嵌入，一行 <code>&lt;script&gt;</code> 接入任何业务网站，气泡 + 弹窗 + 未读徽章</p>
+        <span class="tag badge badge-orange">Widget</span>
+        <span class="link-hint">查看演示 →</span>
+      </a>
+      <a class="card" href="/">
+        <div class="icon">👤</div>
+        <h3>转人工服务</h3>
+        <p>一键转人工、排队机制、取消排队、人工客服实时聊天</p>
+        <span class="tag badge badge-green">闭环</span>
+      </a>
+      <a class="card" href="/">
+        <div class="icon">⭐</div>
+        <h3>服务评价</h3>
+        <p>星级 + 文字评价，1 分钟自动触发，评价后重置会话</p>
+      </a>
+      <a class="card" href="/">
+        <div class="icon">🎨</div>
+        <h3>品牌实时配置</h3>
+        <p>名称 / Logo / 主题色 / 快捷问题 / 欢迎语，管理后台配置即时生效</p>
+        <span class="tag badge badge-blue">品牌</span>
+      </a>
+    </div>
+
+    <div class="section-title">👩‍💼 客服侧能力</div>
+    <div class="grid">
+      <a class="card" href="/agent.html">
+        <div class="icon">🔄</div>
+        <h3>客服上下线</h3>
+        <p>在线 / 处理中 / 离线三态，上下线按钮一键切换</p>
+        <span class="tag badge badge-green">客服台</span>
+        <span class="link-hint">进入工作台 →</span>
+      </a>
+      <div class="plain-card">
+        <h3>实时通信</h3>
+        <ul>
+          <li>WebSocket 双向实时消息</li>
+          <li>会话自动分配（排队）</li>
+          <li>访客信息展示</li>
+          <li>结束会话 + 转回 AI</li>
+        </ul>
+      </div>
+      <div class="plain-card">
+        <h3>工作台功能</h3>
+        <ul>
+          <li>登录防暴力破解（锁定）</li>
+          <li>服务统计（会话数/时长）</li>
+          <li>排队队列实时查看</li>
+          <li>JWT 认证鉴权</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title">⚙️ 管理侧能力</div>
+    <div class="grid">
+      <a class="card" href="/admin.html">
+        <div class="icon">📊</div>
+        <h3>数据看板</h3>
+        <p>12 KPI + 4 图表 + 2 列表：环比趋势、解决率、转人工率、FRT/AHT、兜底率</p>
+        <span class="tag badge badge-blue">Dashboard</span>
+        <span class="link-hint">进入管理后台 →</span>
+      </a>
+      <a class="card" href="/admin.html">
+        <div class="icon">📚</div>
+        <h3>知识库管理</h3>
+        <p>增删改查、关键词、Excel/CSV 批量导入、AI 扩写、搜索</p>
+      </a>
+      <a class="card" href="/admin.html">
+        <div class="icon">📝</div>
+        <h3>未答闭环</h3>
+        <p>AI 无法回答自动记录，运营补充后一键入库，知识库持续进化</p>
+      </a>
+      <a class="card" href="/admin.html">
+        <div class="icon">🛡️</div>
+        <h3>敏感词管理</h3>
+        <p>分类管理、检测测试、命中统计、Excel/CSV 导出</p>
+      </a>
+      <a class="card" href="/admin.html">
+        <div class="icon">🎨</div>
+        <h3>品牌与系统配置</h3>
+        <p>品牌设置、AI 模型配置（DeepSeek/智谱）、连接测试</p>
+      </a>
+      <a class="card" href="/stats.html">
+        <div class="icon">📈</div>
+        <h3>统计面板</h3>
+        <p>30 天趋势、满意度分布、高频问题 TOP10、客服工作量、排队统计、Excel 导出</p>
+        <span class="link-hint">查看统计 →</span>
+      </a>
+    </div>
+
+    <div class="section-title">🛡️ 工程能力</div>
+    <div class="grid">
+      <div class="plain-card">
+        <h3>安全</h3>
+        <ul>
+          <li>JWT 认证 + 角色分权（admin/agent/readonly）</li>
+          <li>敏感词实时检测 + 日志加密</li>
+          <li>Helmet 安全头、限流、XSS 转义</li>
+        </ul>
+      </div>
+      <div class="plain-card">
+        <h3>可观测</h3>
+        <ul>
+          <li>Prometheus 指标端点（QPS/延迟/错误率）</li>
+          <li>结构化 JSON 日志（ELK/Loki 可对接）</li>
+          <li>健康检查 /metrics + 会话超时巡检</li>
+        </ul>
+      </div>
+      <div class="plain-card">
+        <h3>部署</h3>
+        <ul>
+          <li>Docker Compose 四服务编排</li>
+          <li>PostgreSQL 迁移脚本</li>
+          <li>一键启动 start.bat / start.js</li>
+        </ul>
+      </div>
+      <div class="plain-card">
+        <h3>演示数据</h3>
+        <ul>
+          <li><code>node scripts/seed-demo.js</code> 一键生成 30 天模拟数据</li>
+          <li>知识库 25 条 FAQ 预置</li>
+          <li>多账号演示（admin/agent/viewer）</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title">🔐 演示账号</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));">
+      <div class="plain-card" style="text-align:center;">
+        <h3 style="color:var(--primary)">admin</h3>
+        <p style="font-size:13px;color:var(--gray-500);">管理后台 / 统计</p>
+        <p style="font-size:12px;color:var(--gray-400);">admin123</p>
+      </div>
+      <div class="plain-card" style="text-align:center;">
+        <h3 style="color:var(--success)">agent_001</h3>
+        <p style="font-size:13px;color:var(--gray-500);">客服工作台</p>
+        <p style="font-size:12px;color:var(--gray-400);">agent123</p>
+      </div>
+      <div class="plain-card" style="text-align:center;">
+        <h3 style="color:var(--warning)">viewer</h3>
+        <p style="font-size:13px;color:var(--gray-500);">只读查看</p>
+        <p style="font-size:12px;color:var(--gray-400);">viewer123</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

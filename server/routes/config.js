@@ -1,12 +1,14 @@
 /**
  * 系统配置路由
- * 处理AI大模型配置的保存和读取（支持智谱AI和DeepSeek双接口）
+ * 处理 AI 大模型配置（主流方式：单一主模型 + 可选备用，OpenAI 兼容 Base URL）
  */
 
 const express = require('express');
 const router = express.Router();
 const aiService = require('../services/ai');
-const { readAIConfig, saveAIConfig, readBrandConfig, saveBrandConfig, DEFAULT_BRAND } = require('../utils/config');
+const { readAIConfig, saveAIConfig, readBrandConfig, saveBrandConfig, DEFAULT_BRAND, DEFAULT_CONFIG } = require('../utils/config');
+
+const PLACEHOLDER_KEYS = ['your_deepseek_api_key_here', 'your_zhipu_api_key_here'];
 
 // 获取AI配置状态（公开接口，不返回API Key）
 router.get('/ai', async (req, res) => {
@@ -31,25 +33,26 @@ router.get('/ai/detail', async (req, res) => {
     const config = await readAIConfig();
     // API Key 脱敏：只显示前4位和后4位
     const maskKey = (key) => {
-      if (!key || key.length < 8) return key || '';
+      if (!key || PLACEHOLDER_KEYS.includes(key) || key.length < 8) return key || '';
       return key.slice(0, 4) + '****' + key.slice(-4);
     };
     res.json({
       success: true,
       data: {
-        zhipu: {
-          enabled: config.zhipu.enabled,
-          apiKey: config.zhipu.apiKey || '',
-          apiKeyMasked: maskKey(config.zhipu.apiKey),
-          model: config.zhipu.model
+        llm: {
+          provider: config.llm.provider,
+          baseUrl: config.llm.baseUrl,
+          apiKey: config.llm.apiKey,
+          apiKeyMasked: maskKey(config.llm.apiKey),
+          model: config.llm.model,
+          temperature: config.llm.temperature
         },
-        deepseek: {
-          enabled: config.deepseek.enabled,
-          apiKey: config.deepseek.apiKey || '',
-          apiKeyMasked: maskKey(config.deepseek.apiKey),
-          model: config.deepseek.model
+        fallback: {
+          baseUrl: config.fallback.baseUrl,
+          apiKey: config.fallback.apiKey,
+          apiKeyMasked: maskKey(config.fallback.apiKey),
+          model: config.fallback.model
         },
-        defaultProvider: config.defaultProvider,
         systemPrompt: config.systemPrompt,
         updatedAt: config.updatedAt
       }
@@ -63,37 +66,56 @@ router.get('/ai/detail', async (req, res) => {
   }
 });
 
-// 保存智谱AI配置
-router.post('/ai/zhipu', async (req, res) => {
+// 保存AI配置（统一保存主模型 + 备用模型）
+router.post('/ai/save', async (req, res) => {
   try {
-    const { apiKey, model = 'glm-4-flash', enabled = true } = req.body;
-    
-    if (!apiKey || apiKey.trim().length < 10) {
-      return res.status(400).json({
-        success: false,
-        message: 'API Key格式不正确'
-      });
+    const { llm, fallback, systemPrompt } = req.body || {};
+    if (!llm || typeof llm !== 'object') {
+      return res.status(400).json({ success: false, message: '缺少主模型配置' });
+    }
+    if (!llm.baseUrl || !llm.model) {
+      return res.status(400).json({ success: false, message: 'Base URL 和 Model 不能为空' });
     }
 
     const config = await readAIConfig();
-    config.zhipu = {
-      enabled,
-      apiKey: apiKey.trim(),
-      model: model.trim()
+    const cleanKey = (k) => (k && !PLACEHOLDER_KEYS.includes(k)) ? k : '';
+
+    // 主模型（API Key 留空 = 保留原值）
+    config.llm = {
+      provider: (llm.provider || config.llm.provider || 'custom').trim(),
+      baseUrl: llm.baseUrl.trim().replace(/\/+$/, ''),
+      apiKey: llm.apiKey && llm.apiKey.trim() ? cleanKey(llm.apiKey) : config.llm.apiKey,
+      model: llm.model.trim(),
+      temperature: parseFloat(llm.temperature) || 0.7
     };
+    // 备用模型（留空则保持原值；仅当填了 apiKey 或 model 时更新）
+    if (fallback && typeof fallback === 'object') {
+      const fbHas = fallback.baseUrl || fallback.apiKey || fallback.model;
+      if (fbHas) {
+        config.fallback = {
+          baseUrl: (fallback.baseUrl || config.fallback.baseUrl).trim().replace(/\/+$/, ''),
+          apiKey: fallback.apiKey && fallback.apiKey.trim() ? cleanKey(fallback.apiKey) : config.fallback.apiKey,
+          model: (fallback.model || config.fallback.model).trim()
+        };
+      }
+    }
+    // 系统提示词
+    if (systemPrompt && systemPrompt.trim().length >= 10) {
+      config.systemPrompt = systemPrompt.trim();
+    }
 
     await saveAIConfig(config);
 
     res.json({
       success: true,
-      message: '智谱AI配置保存成功',
+      message: 'AI 配置保存成功',
       data: {
-        enabled: config.zhipu.enabled,
-        model: config.zhipu.model
+        llm: { provider: config.llm.provider, baseUrl: config.llm.baseUrl, model: config.llm.model, temperature: config.llm.temperature, hasKey: !!config.llm.apiKey },
+        fallback: { baseUrl: config.fallback.baseUrl, model: config.fallback.model, hasKey: !!config.fallback.apiKey }
       }
     });
   } catch (error) {
-    console.error('保存智谱AI配置失败:', error);
+    console.error('保存AI配置失败:', error);
     res.status(500).json({
       success: false,
       message: '保存配置失败'
@@ -101,161 +123,21 @@ router.post('/ai/zhipu', async (req, res) => {
   }
 });
 
-// 保存DeepSeek配置
-router.post('/ai/deepseek', async (req, res) => {
-  try {
-    const { apiKey, model = 'deepseek-chat', enabled = true } = req.body;
-    
-    if (!apiKey || apiKey.trim().length < 10) {
-      return res.status(400).json({
-        success: false,
-        message: 'API Key格式不正确'
-      });
-    }
-
-    const config = await readAIConfig();
-    config.deepseek = {
-      enabled,
-      apiKey: apiKey.trim(),
-      model: model.trim()
-    };
-
-    await saveAIConfig(config);
-
-    res.json({
-      success: true,
-      message: 'DeepSeek配置保存成功',
-      data: {
-        enabled: config.deepseek.enabled,
-        model: config.deepseek.model
-      }
-    });
-  } catch (error) {
-    console.error('保存DeepSeek配置失败:', error);
-    res.status(500).json({
-      success: false,
-      message: '保存配置失败'
-    });
-  }
-});
-
-// 设置默认提供商
-router.post('/ai/default-provider', async (req, res) => {
-  try {
-    const { provider } = req.body;
-    
-    if (!['zhipu', 'deepseek'].includes(provider)) {
-      return res.status(400).json({
-        success: false,
-        message: '无效的提供商，请选择 zhipu 或 deepseek'
-      });
-    }
-
-    const config = await readAIConfig();
-    config.defaultProvider = provider;
-    await saveAIConfig(config);
-
-    res.json({
-      success: true,
-      message: `默认AI提供商已设置为 ${provider}`,
-      data: { defaultProvider: provider }
-    });
-  } catch (error) {
-    console.error('设置默认提供商失败:', error);
-    res.status(500).json({
-      success: false,
-      message: '设置失败'
-    });
-  }
-});
-
-// 更新系统提示词
-router.post('/ai/system-prompt', async (req, res) => {
-  try {
-    const { prompt } = req.body;
-    
-    if (!prompt || prompt.trim().length < 10) {
-      return res.status(400).json({
-        success: false,
-        message: '系统提示词太短'
-      });
-    }
-
-    const config = await readAIConfig();
-    config.systemPrompt = prompt.trim();
-    await saveAIConfig(config);
-
-    res.json({
-      success: true,
-      message: '系统提示词已更新'
-    });
-  } catch (error) {
-    console.error('更新系统提示词失败:', error);
-    res.status(500).json({
-      success: false,
-      message: '更新失败'
-    });
-  }
-});
-
-// 测试AI配置
+// 测试AI连接（直接使用传入的配置测试，不依赖已保存状态）
 router.post('/ai/test', async (req, res) => {
   try {
-    const { provider = 'zhipu' } = req.body;
-    
-    if (!['zhipu', 'deepseek'].includes(provider)) {
-      return res.status(400).json({
-        success: false,
-        message: '无效的提供商'
-      });
+    const { baseUrl, apiKey, model } = req.body || {};
+    if (!baseUrl || !apiKey || !model) {
+      return res.json({ success: false, message: '请先填写 Base URL / API Key / Model 再测试' });
     }
-
-    console.log(`[API] 收到测试${provider}的请求`);
-    const result = await aiService.testProvider(provider);
-    console.log(`[API] 测试${provider}结果:`, result);
-    
-    // 无论测试成功还是失败，都返回200状态码，通过success字段区分
-    res.json({
-      success: result.success,
-      message: result.message,
-      provider
-    });
+    const result = await aiService.testConnection({ baseUrl, apiKey, model });
+    res.json({ success: result.success, message: result.message });
   } catch (error) {
     console.error('[API] 测试AI配置失败:', error);
-    // 返回200状态码，但success为false，避免前端显示HTTP 500错误
     res.json({
       success: false,
       message: '服务器内部错误: ' + (error.message || '未知错误'),
       error: error.message
-    });
-  }
-});
-
-// 禁用指定AI
-router.post('/ai/disable', async (req, res) => {
-  try {
-    const { provider } = req.body;
-    
-    if (!['zhipu', 'deepseek'].includes(provider)) {
-      return res.status(400).json({
-        success: false,
-        message: '无效的提供商'
-      });
-    }
-
-    const config = await readAIConfig();
-    config[provider].enabled = false;
-    await saveAIConfig(config);
-    
-    res.json({
-      success: true,
-      message: `${provider === 'zhipu' ? '智谱AI' : 'DeepSeek'}已禁用`
-    });
-  } catch (error) {
-    console.error('禁用AI失败:', error);
-    res.status(500).json({
-      success: false,
-      message: '操作失败'
     });
   }
 });

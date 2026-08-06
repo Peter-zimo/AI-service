@@ -9,22 +9,46 @@ const path = require('path');
 const CONFIG_FILE = path.join(__dirname, '../data/ai-config.json');
 const BRAND_FILE = path.join(__dirname, '../data/brand.json');
 
-// 默认配置
+// 默认配置（主流结构：单一主模型 + 可选备用模型，OpenAI 兼容）
 const DEFAULT_CONFIG = {
-  zhipu: {
-    enabled: false,
+  llm: {
+    provider: 'deepseek',                     // 仅用于展示/日志，可任意命名
+    baseUrl: 'https://api.deepseek.com/v1',   // OpenAI 兼容 Base URL
+    apiKey: '',                               // API Key（安全存储于 .env 优先）
+    model: 'deepseek-chat',
+    temperature: 0.7
+  },
+  fallback: {                                 // 备用模型（可选，主模型不可用时降级）
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     apiKey: '',
     model: 'glm-4-flash'
   },
-  deepseek: {
-    enabled: false,
-    apiKey: '',
-    model: 'deepseek-chat'
-  },
-  defaultProvider: 'zhipu',
   systemPrompt: '你是一个专业的客服助手，说话简洁专业，热情友好。如果不知道答案就说"这个问题我暂时无法回答，我会反馈给相关人员"，并建议用户转人工客服。',
   updatedAt: null
 };
+
+// 旧版 ai-config.json（zhipu/deepseek 双结构）→ 新结构迁移
+function migrateLegacyConfig(config) {
+  if (config.llm) return config; // 已是新结构
+  if (!config.deepseek && !config.zhipu) return config;
+  const cleanKey = (k) => (k && k !== 'your_deepseek_api_key_here' && k !== 'your_zhipu_api_key_here') ? k : '';
+  return {
+    llm: {
+      provider: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: cleanKey(config.deepseek?.apiKey),
+      model: config.deepseek?.model || 'deepseek-chat',
+      temperature: 0.7
+    },
+    fallback: {
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: cleanKey(config.zhipu?.apiKey),
+      model: config.zhipu?.model || 'glm-4-flash'
+    },
+    systemPrompt: config.systemPrompt || DEFAULT_CONFIG.systemPrompt,
+    updatedAt: config.updatedAt
+  };
+}
 
 // 确保配置文件目录存在
 async function ensureConfigDir() {
@@ -41,29 +65,32 @@ async function readAIConfig() {
   try {
     await ensureConfigDir();
     const data = await fs.readFile(CONFIG_FILE, 'utf8');
-    const config = JSON.parse(data);
-    const merged = { ...DEFAULT_CONFIG, ...config };
+    const parsed = JSON.parse(data);
+    const migrated = migrateLegacyConfig(parsed);
+    const config = { ...DEFAULT_CONFIG, ...migrated, llm: { ...DEFAULT_CONFIG.llm, ...(migrated.llm || {}) }, fallback: { ...DEFAULT_CONFIG.fallback, ...(migrated.fallback || {}) } };
 
-    // 环境变量覆盖：安全存储 API Key（.env 文件 > JSON 文件）
-    if (process.env.ZHIPU_API_KEY) {
-      merged.zhipu = { ...merged.zhipu, apiKey: process.env.ZHIPU_API_KEY };
-    }
-    if (process.env.DEEPSEEK_API_KEY) {
-      merged.deepseek = { ...merged.deepseek, apiKey: process.env.DEEPSEEK_API_KEY };
-    }
+    // 环境变量覆盖（安全存储 API Key）：LLM_* 优先，兼容旧 DEEPSEEK_API_KEY / ZHIPU_API_KEY
+    const llmKey = process.env.LLM_API_KEY || process.env.DEEPSEEK_API_KEY;
+    if (llmKey) config.llm.apiKey = llmKey;
+    if (process.env.LLM_BASE_URL) config.llm.baseUrl = process.env.LLM_BASE_URL;
+    if (process.env.LLM_MODEL) config.llm.model = process.env.LLM_MODEL;
+    const fbKey = process.env.FALLBACK_API_KEY || process.env.ZHIPU_API_KEY;
+    if (fbKey) config.fallback.apiKey = fbKey;
+    if (process.env.FALLBACK_BASE_URL) config.fallback.baseUrl = process.env.FALLBACK_BASE_URL;
+    if (process.env.FALLBACK_MODEL) config.fallback.model = process.env.FALLBACK_MODEL;
 
     if (global.aiService) {
-      global.aiService.updateConfig(merged);
+      global.aiService.updateConfig(config);
     }
-    return merged;
+    return config;
   } catch {
-    const fallback = { ...DEFAULT_CONFIG };
-    if (process.env.ZHIPU_API_KEY) {
-      fallback.zhipu.apiKey = process.env.ZHIPU_API_KEY;
-    }
-    if (process.env.DEEPSEEK_API_KEY) {
-      fallback.deepseek.apiKey = process.env.DEEPSEEK_API_KEY;
-    }
+    const fallback = { ...DEFAULT_CONFIG, llm: { ...DEFAULT_CONFIG.llm }, fallback: { ...DEFAULT_CONFIG.fallback } };
+    const llmKey = process.env.LLM_API_KEY || process.env.DEEPSEEK_API_KEY;
+    if (llmKey) fallback.llm.apiKey = llmKey;
+    if (process.env.LLM_BASE_URL) fallback.llm.baseUrl = process.env.LLM_BASE_URL;
+    if (process.env.LLM_MODEL) fallback.llm.model = process.env.LLM_MODEL;
+    const fbKey = process.env.FALLBACK_API_KEY || process.env.ZHIPU_API_KEY;
+    if (fbKey) fallback.fallback.apiKey = fbKey;
     return fallback;
   }
 }

@@ -1,12 +1,20 @@
 @echo off
+rem ============================================
+rem  AI Customer Service System - One-click start
+rem  Double-click to start all services.
+rem  Double-click start-stop.bat to stop.
+rem ============================================
+title AI Customer Service - Start
+chcp 65001 >nul
 cd /d "%~dp0"
-echo 正在停止旧服务...
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3456 ^| findstr LISTENING') do (
-    echo 杀死进程 %%a
-    taskkill /F /PID %%a >nul 2>&1
-)
-timeout /t 1 /nobreak >nul
-echo 正在启动服务...
-start "AI客服服务" node server\index.js
-timeout /t 2 /nobreak >nul
-echo 服务已启动，请访问 http://localhost:3456
+
+echo.
+echo  Starting AI Customer Service System...
+echo  Do NOT close this window. Closing it will stop services.
+echo.
+
+node start.js start
+
+echo.
+echo  Press any key to close this window...
+pause >nul

@@ -7,6 +7,7 @@ const WebSocket = require('ws');
 const http = require('http');
 const fs = require('fs');
 const logger = require('./utils/logger');
+const metrics = require('./utils/metrics');
 
 // ===== 全局日志劫持：所有模块的 console.log/warn/error 自动走 winston =====
 const _origConsole = {
@@ -44,8 +45,11 @@ const configRoutes = require('./routes/config');
 const sensitiveRoutes = require('./routes/sensitive');
 const humanRoutes = require('./routes/human');
 const statsRoutes = require('./routes/stats');
+const unansweredRoutes = require('./routes/unanswered');
+const actionsRoutes = require('./routes/actions');
+const authRoutes = require('./routes/auth');
 const humanService = require('./services/human');
-const { basicAuth, changePassword } = require('./middleware/auth');
+const { jwtAuth, basicAuth, changePassword } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -113,25 +117,65 @@ const adminLimiter = rateLimit({
   message: { success: false, error: '请求过于频繁，请稍后再试' }
 });
 
-// 静态文件中间件（排除管理页面）
-app.get(['/admin.html', '/agent.html'], basicAuth, (req, res) => {
+// 管理后台 + 客服台页面（页面本身免认证，内部 API 走 JWT）
+app.get(['/admin.html', '/agent.html'], (req, res) => {
   const filePath = path.join(__dirname, '../public', req.path);
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(filePath);
 });
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../public'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
-// 健康检查（无需认证）
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+// ============ 请求追踪中间件（Prometheus 指标采集）============
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const route = req.route?.path || req.path || 'unknown';
+    metrics.inc('http_requests_total', [req.method, route, String(res.statusCode)]);
+    metrics.observe('http_request_duration_ms', duration, [req.method, route]);
+  });
+  next();
 });
 
-// 修改管理后台密码（需要认证）
-app.post('/api/auth/change-password', basicAuth, changePassword);
+// 健康检查（增强版——含系统信息）
+app.get('/api/health', (req, res) => {
+  const os = require('os');
+  res.json({
+    status: 'ok',
+    time: new Date().toISOString(),
+    uptime: Math.floor(process.uptime()),
+    memory: {
+      heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+      heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
+    },
+    cpu: os.loadavg()[0]?.toFixed(2) || 'N/A',
+    node: process.version,
+    pid: process.pid,
+  });
+});
 
+// Prometheus 指标端点（内部网络访问，不暴露公网）
+app.get('/api/metrics', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; version=0.0.4');
+  res.send(metrics.toPrometheusText());
+});
+
+// 认证路由（登录/刷新/修改密码/当前用户 —— 无需在路由注册处额外认证）
+app.use('/api/auth', authRoutes);
 
 // 调试端点（仅开发环境，生产环境返回404）
 if (process.env.NODE_ENV !== 'production') {
-  app.get(['/api/debug/dir', '/api/debug/knowledge', '/api/debug/ai-test'], basicAuth);
+  app.get(['/api/debug/dir', '/api/debug/knowledge', '/api/debug/ai-test'], jwtAuth());
 
   app.get('/api/debug/dir', (req, res) => {
     res.json({ 
@@ -141,17 +185,17 @@ if (process.env.NODE_ENV !== 'production') {
     });
   });
 
-  app.get('/api/debug/knowledge', (req, res) => {
+  app.get('/api/debug/knowledge', async (req, res) => {
     const knowledgeService = require('./services/knowledge');
     const testQuery = req.query.q || '工作时间';
-    const results = knowledgeService.search(testQuery);
+    const results = await knowledgeService.search(testQuery);
     res.json({ 
       totalItems: knowledgeService.knowledgeBase.length,
       testQuery: testQuery,
       searchResults: results.map(r => ({
         question: r.question,
         score: r.score,
-        matchedKeywords: r.matchedKeywords
+        source: r.source || 'legacy'
       }))
     });
   });
@@ -179,7 +223,7 @@ if (process.env.NODE_ENV !== 'production') {
   });
 } else {
   // 生产环境：调试接口返回404
-  app.get('/api/debug/*', (req, res) => {
+  app.get('/api/debug/{*splat}', (req, res) => {
     res.status(404).json({ success: false, error: '该接口在生产环境已禁用' });
   });
 }
@@ -189,7 +233,7 @@ app.post('/api/chat/create', createLimiter);   // 创建会话限流
 app.post('/api/chat/message', chatLimiter);    // 聊天消息限流
 
 // 对话列表（需要认证）— 必须在 chatRoutes 挂载之前注册，否则会被 app.use 吞掉
-app.get('/api/chat/list', adminLimiter, basicAuth, (req, res) => {
+app.get('/api/chat/list', adminLimiter, jwtAuth(['admin', 'agent']), (req, res) => {
   try {
     const db = require('./services/database');
     const limit = parseInt(req.query.limit) || 100;
@@ -234,6 +278,7 @@ app.get('/api/chat/list', adminLimiter, basicAuth, (req, res) => {
 });
 
 app.use('/api/chat', chatRoutes);  // 访客聊天，无需认证
+app.use('/api/actions', chatLimiter, actionsRoutes);  // 业务执行（订单/申诉/退款），用户侧操作
 app.get('/api/config/brand', (req, res) => {
   // 品牌配置公开接口（访客端加载品牌皮肤）
   const { readBrandConfig } = require('./utils/config');
@@ -244,12 +289,16 @@ app.get('/api/config/brand', (req, res) => {
   });
 });
 
-// ============ 管理 API（需要认证）============
-app.use('/api/knowledge', adminLimiter, basicAuth, knowledgeRoutes);  // 知识库管理
-app.use('/api/config', adminLimiter, basicAuth, configRoutes.router);  // 系统配置
-app.use('/api/sensitive', adminLimiter, basicAuth, sensitiveRoutes);   // 敏感词管理
-app.use('/api/human', basicAuth, humanRoutes);                         // 人工客服（WebSocket 协调，不加次数限流）
-app.use('/api/stats', adminLimiter, basicAuth, statsRoutes);           // 数据统计
+// ============ 管理 API（JWT 认证 + 角色分权）============
+app.use('/api/knowledge', adminLimiter, jwtAuth(['admin', 'agent']), knowledgeRoutes);
+app.use('/api/config', adminLimiter, jwtAuth(['admin']), configRoutes.router);
+app.use('/api/sensitive', adminLimiter, jwtAuth(['admin', 'agent']), sensitiveRoutes);
+app.use('/api/human', (req, res, next) => {
+  if (req.path === '/login') return next();  // 登录接口放行
+  return jwtAuth(['agent', 'admin'])(req, res, next);
+}, humanRoutes);
+app.use('/api/stats', adminLimiter, jwtAuth(['admin', 'agent', 'readonly']), statsRoutes);
+app.use('/api/unanswered', adminLimiter, jwtAuth(['admin', 'agent']), unansweredRoutes);
 
 // 初始化数据库（已包含超时检查启动）
 const db = require('./services/database');

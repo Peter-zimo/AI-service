@@ -383,19 +383,21 @@ router.get('/export/:format', (req, res) => {
   }
 });
 
-// 搜索知识库
-router.get('/search/query', (req, res) => {
+// 搜索知识库（混合检索：FTS5 + 语义向量 + RRF 融合）
+router.get('/search/query', async (req, res) => {
   try {
     const { q } = req.query;
     if (!q) {
       return res.status(400).json({ success: false, error: '缺少搜索关键词' });
     }
 
-    const results = knowledgeService.search(q);
+    const results = await knowledgeService.search(q);
     res.json({
       success: true,
       query: q,
-      results
+      results,
+      hybrid: true,
+      note: '混合检索（FTS5 + 语义向量 + RRF）'
     });
   } catch (error) {
     console.error('搜索失败:', error);

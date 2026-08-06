@@ -159,18 +159,18 @@ const conversations = {
 
 // 消息服务
 const messages = {
-  add: (id, convId, role, content, aiConf = null) => {
+  add: (id, convId, role, content, aiConf = null, source = null) => {
     const now = new Date().toISOString();
     db.prepare(`
-      INSERT INTO messages (id, conversation_id, role, content, ai_confidence, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, convId, role, content, aiConf, now);
+      INSERT INTO messages (id, conversation_id, role, content, ai_confidence, source, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, convId, role, content, aiConf, source, now);
 
     db.prepare(`
       UPDATE conversations SET updated_at = ? WHERE id = ?
     `).run(now, convId);
 
-    return { id, conversation_id: convId, role, content, ai_confidence: aiConf, created_at: now };
+    return { id, conversation_id: convId, role, content, ai_confidence: aiConf, source, created_at: now };
   },
 
   getByConversation: (convId) => {
@@ -278,7 +278,7 @@ const stats = {
 // 启动定时检查
 function startTimeoutChecker() {
   setInterval(() => {
-    conversations.checkTimeouts();
+    try { conversations.checkTimeouts(); } catch(e) { console.error('[会话] 超时检查失败:', e.message); }
   }, conversations.TIMEOUT.CHECK_INTERVAL);
   console.log('[会话] 超时检查定时器已启动，每30秒检查一次');
 }

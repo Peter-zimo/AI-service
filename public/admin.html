@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI客服管理后台</title>
+  <link rel="stylesheet" href="/css/theme.css?v=20260806">
+  <link rel="stylesheet" href="/css/admin.css?v=20260806">
+  <script src="/js/common.js?v=20260806" defer></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f3f4f6; color: #374151; }
@@ -20,10 +24,11 @@
     .logo-icon { width: 36px; height: 36px; background: #eff6ff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
     .logo-text { font-weight: 600; font-size: 14px; color: #111827; }
     .logo-sub { font-size: 11px; color: #9ca3af; }
-    nav { padding: 12px 8px; flex: 1; }
-    .nav-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #6b7280; width: 100%; text-align: left; border: none; background: none; transition: all 0.15s; }
-    .nav-item:hover { background: #f9fafb; color: #374151; }
-    .nav-item.active { background: #eff6ff; color: #2563eb; font-weight: 500; }
+    nav { padding: 8px 8px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .nav-section { font-size: 11px; color: #bbb; padding: 12px 12px 4px; font-weight: 500; letter-spacing: 0.5px; }
+    .nav-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #6b7280; width: 100%; text-align: left; border: none; background: none; transition: all 0.15s; }
+    .nav-item:hover { background: #f5f6f8; color: #374151; }
+    .nav-item.active { background: #eef2ff; color: #4f46e5; font-weight: 500; }
     .sidebar-footer { padding: 12px 16px; border-top: 1px solid #f3f4f6; font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between; align-items: center; }
 
     /* ===== 连接状态 ===== */
@@ -58,54 +63,12 @@
     .bar:hover { background: #2563eb; }
     .bar-label { font-size: 11px; color: #9ca3af; flex-shrink: 0; }
 
-    /* ===== 按钮 ===== */
-    .btn { border: none; border-radius: 8px; padding: 8px 18px; font-size: 14px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
-    .btn-primary { background: #2563eb; color: #fff; }
-    .btn-primary:hover { background: #1d4ed8; }
-    .btn-secondary { background: #f3f4f6; color: #374151; }
-    .btn-secondary:hover { background: #e5e7eb; }
-    .btn-danger { background: none; color: #ef4444; border: none; font-size: 13px; cursor: pointer; padding: 2px 6px; font-family: inherit; }
-    .btn-danger:hover { color: #dc2626; }
-    .btn-link { background: none; color: #2563eb; border: none; font-size: 13px; cursor: pointer; padding: 2px 6px; font-family: inherit; }
-    .btn-link:hover { text-decoration: underline; }
 
-    /* ===== 输入框 ===== */
-    .input { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 9px 14px; font-size: 14px; outline: none; font-family: inherit; transition: border 0.15s; background: #fff; }
-    .input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-    .form-group { margin-bottom: 16px; }
-    .form-label { display: block; font-size: 13px; color: #6b7280; margin-bottom: 6px; font-weight: 500; }
 
-    /* ===== 表格 ===== */
-    .table-wrap { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { background: #f9fafb; text-align: left; padding: 11px 20px; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
-    td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid #f3f4f6; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #fafafa; }
 
-    /* ===== Badge ===== */
-    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-    .badge-green { background: #dcfce7; color: #16a34a; }
-    .badge-gray { background: #f3f4f6; color: #6b7280; }
-    .badge-blue { background: #dbeafe; color: #2563eb; font-size: 11px; margin: 2px; }
 
-    /* ===== 加载/空状态 ===== */
-    .empty { text-align: center; padding: 48px 0; color: #9ca3af; font-size: 14px; }
-    .loading { text-align: center; padding: 48px 0; color: #9ca3af; font-size: 14px; }
-    .loading::after { content: ''; display: inline-block; width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ===== 错误横幅 ===== */
-    .err-banner { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; font-size: 14px; color: #dc2626; display: none; align-items: center; gap: 10px; }
-    .err-banner.show { display: flex; }
-    .err-banner button { margin-left: auto; background: #dc2626; color: #fff; border: none; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
 
-    /* ===== 弹窗 ===== */
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
-    .modal.hidden { display: none; }
-    .modal-box { background: #fff; border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-    .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #111827; }
-    .modal-footer { display: flex; gap: 12px; margin-top: 20px; }
     .conv-detail { background: #f8fafc; border-radius: 10px; padding: 16px; max-height: 50vh; overflow-y: auto; }
     .conv-msg { margin-bottom: 12px; }
     .conv-msg .role { font-size: 11px; color: #9ca3af; margin-bottom: 3px; }
@@ -113,17 +76,16 @@
     .conv-msg.user .bubble { background: #2563eb; color: #fff; }
     .conv-msg.assistant .bubble { background: #fff; border: 1px solid #e5e7eb; }
 
-    /* ===== Toast ===== */
-    .toast { position: fixed; top: 20px; right: 20px; z-index: 2000; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: toastIn 0.3s ease; display: none; }
-    .toast-success { background: #16a34a; }
-    .toast-error { background: #dc2626; }
     @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
     /* ===== 响应式 ===== */
     @media (max-width: 900px) {
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -138,10 +100,14 @@
       </div>
     </div>
     <nav>
+      <div class="nav-section">运营核心</div>
       <button class="nav-item active" id="nav-dashboard" onclick="switchTab('dashboard')">📊 数据概览</button>
       <button class="nav-item" id="nav-stats-link" onclick="statsGo()">📈 统计面板</button>
       <button class="nav-item" id="nav-conversations" onclick="switchTab('conversations')">💬 对话记录</button>
-      <button class="nav-item" id="nav-knowledge" onclick="switchTab('knowledge')">📚 知识库管理</button>
+      <div class="nav-section">知识管理</div>
+      <button class="nav-item" id="nav-knowledge" onclick="switchTab('knowledge')">📚 知识库</button>
+      <button class="nav-item" id="nav-unanswered" onclick="switchTab('unanswered')">📝 待补充知识</button>
+      <div class="nav-section">系统设置</div>
       <button class="nav-item" id="nav-brand" onclick="switchTab('brand')">🎨 品牌设置</button>
       <button class="nav-item" id="nav-sensitive" onclick="switchTab('sensitive')">🚫 敏感词管理</button>
       <button class="nav-item" id="nav-settings" onclick="switchTab('settings')">⚙️ 系统设置</button>
@@ -165,11 +131,74 @@
     <!-- ===== 数据概览 ===== -->
     <div id="tab-dashboard" class="tab-content active">
       <div class="page-title">数据概览</div>
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-label">今日对话</div><div id="stat-convs" class="stat-value stat-blue">—</div></div>
-        <div class="stat-card"><div class="stat-label">今日消息</div><div id="stat-msgs" class="stat-value stat-green">—</div></div>
-        <div class="stat-card"><div class="stat-label">AI解答率</div><div id="stat-ai" class="stat-value stat-purple">—</div></div>
-        <div class="stat-card"><div class="stat-label">平均满意度</div><div id="stat-sat" class="stat-value stat-amber">—</div></div>
+      <!-- 第一行：今日数据 + 实时在线 -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">今日对话</div>
+          <div class="kpi-value" id="kpi-convs">—</div>
+          <div class="kpi-trend" id="kpi-convs-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">今日消息</div>
+          <div class="kpi-value" id="kpi-msgs">—</div>
+          <div class="kpi-trend" id="kpi-msgs-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">今日评价</div>
+          <div class="kpi-value" id="kpi-ratings">—</div>
+          <div class="kpi-trend" id="kpi-ratings-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">实时在线会话</div>
+          <div class="kpi-value" id="kpi-active">—</div>
+          <div class="kpi-trend" id="kpi-active-trend">—</div>
+        </div>
+      </div>
+      <!-- 第二行：质量指标 -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">AI 解答率</div>
+          <div class="kpi-value" id="kpi-ai">—<span class="kpi-unit">%</span></div>
+          <div class="kpi-trend" id="kpi-ai-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">转人工率</div>
+          <div class="kpi-value" id="kpi-transfer">—<span class="kpi-unit">%</span></div>
+          <div class="kpi-trend" id="kpi-transfer-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">会话解决率</div>
+          <div class="kpi-value" id="kpi-resolve">—<span class="kpi-unit">%</span></div>
+          <div class="kpi-trend" id="kpi-resolve-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">平均满意度</div>
+          <div class="kpi-value" id="kpi-sat">—</div>
+          <div class="kpi-trend" id="kpi-sat-trend">—</div>
+        </div>
+      </div>
+      <!-- 第三行：效率指标 -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">首次响应时长 (FRT)</div>
+          <div class="kpi-value" id="kpi-frt">—<span class="kpi-unit">分</span></div>
+          <div class="kpi-trend" id="kpi-frt-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">平均处理时长 (AHT)</div>
+          <div class="kpi-value" id="kpi-aht">—<span class="kpi-unit">分</span></div>
+          <div class="kpi-trend" id="kpi-aht-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">兜底率 (Fallback)</div>
+          <div class="kpi-value" id="kpi-fallback">—<span class="kpi-unit">%</span></div>
+          <div class="kpi-trend" id="kpi-fallback-trend">—</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">AI 独立处理</div>
+          <div class="kpi-value" id="kpi-aihandled">—</div>
+          <div class="kpi-trend" id="kpi-aihandled-trend">—</div>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">本周对话趋势</div>
@@ -178,6 +207,42 @@
       <div class="card">
         <div class="card-title">知识库概况</div>
         <div id="kb-summary" style="font-size:14px;color:#6b7280;">加载中...</div>
+      </div>
+      <!-- 图表区：2x2 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+        <div class="card-section">
+          <div class="card-section-header"><div class="card-section-title">近7日对话与消息</div></div>
+          <div class="card-section-body"><canvas id="chart-trend" height="200"></canvas></div>
+        </div>
+        <div class="card-section">
+          <div class="card-section-header"><div class="card-section-title">AI / 人工处理分布</div></div>
+          <div class="card-section-body"><canvas id="chart-dist" height="200"></canvas></div>
+        </div>
+        <div class="card-section">
+          <div class="card-section-header"><div class="card-section-title">满意度分布</div></div>
+          <div class="card-section-body"><canvas id="chart-sat" height="200"></canvas></div>
+        </div>
+        <div class="card-section">
+          <div class="card-section-header"><div class="card-section-title">兜底率趋势（近14天）</div></div>
+          <div class="card-section-body"><canvas id="chart-fallback" height="200"></canvas></div>
+        </div>
+      </div>
+      <!-- 列表区：差评 + 未答 TOP -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+        <div class="card-section">
+          <div class="card-section-header">
+            <div class="card-section-title">差评会话（≤2星）</div>
+            <button class="btn btn-sm btn-secondary" onclick="renderBadReviewList()">刷新</button>
+          </div>
+          <div class="card-section-body" id="bad-review-list" style="max-height:320px;overflow-y:auto;"><div class="empty-state"><span class="empty-icon">📉</span><div class="empty-title">加载中...</div></div></div>
+        </div>
+        <div class="card-section">
+          <div class="card-section-header">
+            <div class="card-section-title">高频未答问题 TOP</div>
+            <button class="btn btn-sm btn-secondary" onclick="renderUnansweredTop()">刷新</button>
+          </div>
+          <div class="card-section-body" id="unanswered-top-list" style="max-height:320px;overflow-y:auto;"><div class="empty-state"><span class="empty-icon">📝</span><div class="empty-title">加载中...</div></div></div>
+        </div>
       </div>
     </div>
 
@@ -205,6 +270,7 @@
         <div class="page-title" style="margin:0">知识库管理</div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-secondary" onclick="openImportModal()" style="font-size:13px;">📥 导入</button>
+          <button class="btn btn-secondary" onclick="batchAIExpand()" style="font-size:13px;">🤖 AI扩写</button>
           <button class="btn btn-secondary" onclick="window.open('/api/knowledge/export/xlsx','_blank')" style="font-size:13px;">📤 Excel导出</button>
           <button class="btn btn-secondary" onclick="window.open('/api/knowledge/export/csv','_blank')" style="font-size:13px;">📄 CSV导出</button>
           <button class="btn btn-primary" onclick="openAddModal()">＋ 添加问答</button>
@@ -218,6 +284,27 @@
           <thead><tr><th style="width:38%">问题</th><th style="width:35%">答案预览</th><th style="width:17%">关键词</th><th style="width:10%">操作</th></tr></thead>
           <tbody id="kb-tbody"><tr><td colspan="4" class="loading">加载中</td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ===== 待补充知识 ===== -->
+    <div id="tab-unanswered" class="tab-content">
+      <!-- 头部统计卡片 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="page-title" style="margin:0">📝 待补充知识</div>
+        <button class="btn btn-secondary" onclick="loadUnanswered()" style="font-size:13px;">🔄 刷新</button>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-label">待补充</div><div id="ua-pending" class="stat-value stat-amber">—</div></div>
+        <div class="stat-card"><div class="stat-label">已补充</div><div id="ua-added" class="stat-value stat-green">—</div></div>
+        <div class="stat-card"><div class="stat-label">忽略</div><div id="ua-dismissed" class="stat-value stat-gray">—</div></div>
+      </div>
+      <!-- 列表区域 -->
+      <div id="unanswered-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+      <div id="unanswered-empty" style="display:none;text-align:center;padding:60px 20px;">
+        <div style="font-size:48px;margin-bottom:16px;">🎉</div>
+        <div style="font-size:18px;font-weight:500;color:#333;margin-bottom:8px;">全部已处理</div>
+        <div style="font-size:14px;color:#999;">AI 未能通过知识库回答的问题将自动记录在此</div>
       </div>
     </div>
 
@@ -394,56 +481,44 @@
             <span>AI大模型配置</span>
             <span id="ai-status-badge" class="badge badge-gray">未配置</span>
           </div>
+          <div style="font-size:12px;color:#9ca3af;margin-top:4px;">任意 OpenAI 兼容服务均可接入（DeepSeek / 智谱 / Kimi / 通义 / Ollama 本地等），只需填 Base URL + API Key + Model</div>
           
-          <!-- 智谱AI配置 -->
-          <div class="form-group" style="margin-top:12px;padding:12px;background:#f9fafb;border-radius:8px;">
-            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="selectAIProvider('zhipu')">
-              <input type="radio" name="ai-provider" id="cfg-zhipu-enabled" value="zhipu" onchange="onProviderChange('zhipu')">
-              <span>启用智谱AI</span>
-              <span id="zhipu-connected-badge" class="badge badge-green" style="display:none;margin-left:auto;">✓ 已连接</span>
-            </label>
-            <input type="password" id="cfg-zhipu-apikey" class="input" placeholder="智谱GLM API Key" style="margin-top:8px;">
-            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">申请地址：<a href="https://open.bigmodel.cn" target="_blank">open.bigmodel.cn</a></div>
-            <select id="cfg-zhipu-model" class="input" style="margin-top:8px;">
-              <option value="glm-4-flash">GLM-4-Flash（免费）</option>
-              <option value="glm-4">GLM-4（付费，更强）</option>
-              <option value="glm-4-air">GLM-4-Air（付费，平衡）</option>
-            </select>
-            <div style="display:flex;gap:8px;margin-top:8px;">
-              <button class="btn btn-primary" onclick="saveZhipuConfig()" style="flex:1;font-size:12px;padding:6px 12px;">💾 保存</button>
-              <button class="btn btn-secondary" id="zhipu-test-btn" onclick="testAIProvider('zhipu')" style="flex:1;font-size:12px;padding:6px 12px;display:none;">🧪 测试连接</button>
+          <!-- 主模型（OpenAI 兼容，必填） -->
+          <div class="form-group" style="margin-top:12px;padding:14px;background:#f9fafb;border-radius:8px;">
+            <label class="form-label" style="font-size:13px;font-weight:600;color:#374151;margin-bottom:0;">主模型 <span style="color:#9ca3af;font-weight:400;">（必填）</span></label>
+            <input type="text" id="cfg-llm-provider" class="input" placeholder="提供商名称（deepseek / kimi / qwen / ollama…，仅展示用）" style="margin-top:8px;">
+            <input type="text" id="cfg-llm-baseurl" class="input" placeholder="Base URL（如 https://api.deepseek.com/v1）" style="margin-top:8px;">
+            <input type="password" id="cfg-llm-apikey" class="input" placeholder="API Key" style="margin-top:8px;">
+            <input type="text" id="cfg-llm-model" class="input" placeholder="Model（如 deepseek-chat / glm-4-flash / qwen-plus）" style="margin-top:8px;">
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+              <input type="number" id="cfg-llm-temperature" class="input" placeholder="温度 0.7" min="0" max="2" step="0.1" style="flex:1;">
+              <button class="btn btn-secondary" id="llm-test-btn" onclick="testAIConnection('llm')" style="flex:1;font-size:12px;padding:6px 12px;margin:0;">🧪 测试连接</button>
             </div>
-            <div id="zhipu-test-result" style="margin-top:8px;font-size:12px;display:none;"></div>
+            <div id="llm-test-result" style="margin-top:8px;font-size:12px;display:none;"></div>
           </div>
           
-          <!-- DeepSeek配置 -->
-          <div class="form-group" style="margin-top:12px;padding:12px;background:#f9fafb;border-radius:8px;">
-            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="selectAIProvider('deepseek')">
-              <input type="radio" name="ai-provider" id="cfg-deepseek-enabled" value="deepseek" onchange="onProviderChange('deepseek')">
-              <span>启用DeepSeek</span>
-              <span id="deepseek-connected-badge" class="badge badge-green" style="display:none;margin-left:auto;">✓ 已连接</span>
+          <!-- 备用模型（可选，主模型不可用时自动降级） -->
+          <div class="form-group" style="margin-top:12px;padding:14px;background:#f9fafb;border-radius:8px;">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:#374151;margin-bottom:0;" onclick="toggleFallback()">
+              <input type="checkbox" id="cfg-fallback-enabled" onchange="toggleFallback()">
+              <span>备用模型 <span style="color:#9ca3af;font-weight:400;">（可选）</span></span>
             </label>
-            <input type="password" id="cfg-deepseek-apikey" class="input" placeholder="DeepSeek API Key" style="margin-top:8px;">
-            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">申请地址：<a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a></div>
-            <select id="cfg-deepseek-model" class="input" style="margin-top:8px;">
-              <option value="deepseek-chat">DeepSeek-V3（推荐）</option>
-              <option value="deepseek-reasoner">DeepSeek-R1（推理）</option>
-            </select>
-            <div style="display:flex;gap:8px;margin-top:8px;">
-              <button class="btn btn-primary" onclick="saveDeepseekConfig()" style="flex:1;font-size:12px;padding:6px 12px;">💾 保存</button>
-              <button class="btn btn-secondary" id="deepseek-test-btn" onclick="testAIProvider('deepseek')" style="flex:1;font-size:12px;padding:6px 12px;display:none;">🧪 测试连接</button>
+            <div id="cfg-fallback-body" style="display:none;">
+              <input type="text" id="cfg-fallback-baseurl" class="input" placeholder="备用 Base URL（如 https://open.bigmodel.cn/api/paas/v4）" style="margin-top:8px;">
+              <input type="password" id="cfg-fallback-apikey" class="input" placeholder="备用 API Key" style="margin-top:8px;">
+              <input type="text" id="cfg-fallback-model" class="input" placeholder="备用 Model（如 glm-4-flash）" style="margin-top:8px;">
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn btn-secondary" id="fallback-test-btn" onclick="testAIConnection('fallback')" style="flex:1;font-size:12px;padding:6px 12px;margin:0;">🧪 测试连接</button>
+              </div>
+              <div id="fallback-test-result" style="margin-top:8px;font-size:12px;display:none;"></div>
             </div>
-            <div id="deepseek-test-result" style="margin-top:8px;font-size:12px;display:none;"></div>
           </div>
           
-          <!-- 默认提供商 -->
-          <div class="form-group" style="margin-top:12px;">
-            <label class="form-label">默认使用</label>
-            <select id="cfg-default-provider" class="input" onchange="saveDefaultProvider()">
-              <option value="zhipu">智谱AI（优先）</option>
-              <option value="deepseek">DeepSeek（优先）</option>
-            </select>
+          <!-- 保存 -->
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-primary" onclick="saveAIConfig()" style="flex:1;">💾 保存AI配置</button>
           </div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:6px;">提示：API Key 留空则保持已保存的值不修改</div>
         </div>
         <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f3f4f6;">
           <button class="btn btn-primary" onclick="saveSettings()">保存基本设置</button>
@@ -490,11 +565,11 @@
     <div class="modal-title" id="kb-modal-title">添加问答</div>
     <input type="hidden" id="edit-id">
     <div class="form-group">
-      <label class="form-label">问题 <span style="color:#ef4444">*</span></label>
+      <label class="form-label">问题 <span style="color:var(--danger)">*</span></label>
       <input type="text" id="input-question" class="input" placeholder="如：你们的工作时间是几点？">
     </div>
     <div class="form-group">
-      <label class="form-label">答案 <span style="color:#ef4444">*</span></label>
+      <label class="form-label">答案 <span style="color:var(--danger)">*</span></label>
       <textarea id="input-answer" class="input" rows="5" style="resize:vertical;" placeholder="请输入标准回答..."></textarea>
     </div>
     <div class="form-group">
@@ -525,7 +600,7 @@
     <div class="modal-title">添加敏感词</div>
     <input type="hidden" id="sw-edit-id">
     <div class="form-group">
-      <label class="form-label">分类 <span style="color:#ef4444">*</span></label>
+      <label class="form-label">分类 <span style="color:var(--danger)">*</span></label>
       <select id="sw-input-category" class="input">
         <option value="politics">政治敏感</option>
         <option value="porn">色情低俗</option>
@@ -535,7 +610,7 @@
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label">敏感词 <span style="color:#ef4444">*</span></label>
+      <label class="form-label">敏感词 <span style="color:var(--danger)">*</span></label>
       <input type="text" id="sw-input-word" class="input" placeholder="输入敏感词，多个用逗号分隔">
       <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持同时添加多个词，用逗号分隔</div>
     </div>
@@ -654,25 +729,21 @@ function doLogin() {
     return;
   }
 
-  authHeader = 'Basic ' + btoa(username + ':' + password);
-  localStorage.setItem('authHeader', authHeader);
-  localStorage.setItem('currentUser', username);
-  currentUser = username;
-
-  // 验证登录：先用 /health 测通连接，再调 /api/stats/satisfaction 验证密码
-  fetchWithTimeout(API + '/health', {}, 3000).then(res => {
-    if (!res.ok) throw new Error('服务不可用');
-    // 连接通了，验证密码（API 已含 /api 前缀，此处不再重复）
-    return fetchWithTimeout(API + '/stats/satisfaction', {
-      headers: { 'Authorization': authHeader }
-    }, 5000);
-  }).then(res => {
+  // 验证登录：调 JWT 登录接口获取 token
+  fetchWithTimeout(API + '/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  }, 5000).then(res => {
     if (!res.ok) throw new Error('密码错误');
     return res.json();
   }).then(data => {
     if (!data.success) throw new Error('密码错误');
+    // 升级为 JWT Bearer token
+    authHeader = 'Bearer ' + data.data.accessToken;
+    localStorage.setItem('authHeader', authHeader);
     isLoggedIn = true;
-    healthOk = true; // 登录刚验证过，标记服务为可用
+    healthOk = true;
     document.getElementById('login-modal').style.display = 'none';
     initApp();
   }).catch(e => {
@@ -747,6 +818,7 @@ function switchTab(name) {
   if (name === 'dashboard') loadStats();
   if (name === 'conversations') loadConversations();
   if (name === 'knowledge') loadKnowledge();
+  if (name === 'unanswered') loadUnanswered();
   if (name === 'brand') loadBrandConfig();
   if (name === 'sensitive') loadSensitiveWords();
 }
@@ -824,6 +896,22 @@ function showLoginForm() {
 }
 
 /* ===== 数据概览 ===== */
+// 渲染环比徽章：pct 为百分比（可为 null），downGood=true 表示"下降是好事"（时长/转人工率类）
+function setKpiTrend(elId, pct, downGood) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (pct === null || pct === undefined || isNaN(pct)) {
+    el.textContent = '';
+    el.className = 'kpi-trend';
+    return;
+  }
+  const up = pct > 0;
+  const good = downGood ? !up : up;
+  el.className = 'kpi-trend ' + (good ? 'up' : 'down');
+  const arrow = up ? '↑' : (pct < 0 ? '↓' : '→');
+  el.textContent = arrow + ' ' + Math.abs(Math.round(pct)) + '% 较昨日';
+}
+
 async function loadStats() {
   try {
     const res = await apiFetch(API + '/stats/overview');
@@ -831,22 +919,59 @@ async function loadStats() {
     const result = await res.json();
     if (!result.success) throw new Error(result.error);
     const d = result.data;
+    const t = d.today || {};
+    const y = d.yesterday || {};
+    const m = d.metrics || {};
 
-    document.getElementById('stat-convs').textContent = d.today ? d.today.conversations : (d.totalConversations ?? 0);
-    document.getElementById('stat-msgs').textContent = d.today ? d.today.messages : (d.totalMessages ?? 0);
-    document.getElementById('stat-ai').textContent = (d.aiHandlingRate ?? 0) + '%';
+    // ---- 第一行：今日 + 环比 ----
+    document.getElementById('kpi-convs').textContent = (t.conversations ?? 0);
+    setKpiTrend('kpi-convs-trend', (y.conversations > 0) ? ((t.conversations - y.conversations) / y.conversations) * 100 : (t.conversations > 0 ? 100 : null), false);
+    document.getElementById('kpi-msgs').textContent = (t.messages ?? 0);
+    setKpiTrend('kpi-msgs-trend', (y.messages > 0) ? ((t.messages - y.messages) / y.messages) * 100 : (t.messages > 0 ? 100 : null), false);
+    document.getElementById('kpi-ratings').textContent = (t.ratings ?? 0);
+    setKpiTrend('kpi-ratings-trend', (y.ratings > 0) ? ((t.ratings - y.ratings) / y.ratings) * 100 : (t.ratings > 0 ? 100 : null), false);
+    document.getElementById('kpi-active').textContent = (m.activeTotal ?? d.activeConversations ?? 0);
+    setKpiTrend('kpi-active-trend', null, false);
+
+    // ---- 第二行：质量指标 ----
+    document.getElementById('kpi-ai').textContent = (d.aiHandlingRate ?? 0);
+    setKpiTrend('kpi-ai-trend', null, false);
+    document.getElementById('kpi-transfer').textContent = (m.transferRate ?? 0);
+    setKpiTrend('kpi-transfer-trend', null, true);  // 转人工率降为好
+    document.getElementById('kpi-resolve').textContent = (m.resolutionRate ?? 0);
+    setKpiTrend('kpi-resolve-trend', null, false);
     const sat = d.avgSatisfaction;
-    document.getElementById('stat-sat').textContent = (sat && sat > 0) ? sat + ' ⭐' : '暂无';
+    document.getElementById('kpi-sat').textContent = (sat && sat > 0) ? sat + ' ⭐' : '暂无';
+    setKpiTrend('kpi-sat-trend', (y.avgSatisfaction > 0 && sat > 0) ? ((sat - y.avgSatisfaction) / y.avgSatisfaction) * 100 : null, false);
+
+    // ---- 第三行：效率指标 ----
+    const frt = t.avgResponseMinutes;
+    document.getElementById('kpi-frt').textContent = (frt !== null && frt !== undefined) ? frt : '—';
+    setKpiTrend('kpi-frt-trend', null, true);  // FRT 降为好
+    const aht = m.avgHandleMinutes;
+    document.getElementById('kpi-aht').textContent = (aht !== null && aht !== undefined) ? aht : '—';
+    setKpiTrend('kpi-aht-trend', null, true);  // AHT 降为好
+    document.getElementById('kpi-fallback').textContent = (m.fallbackRate ?? 0);
+    setKpiTrend('kpi-fallback-trend', null, true);  // 兜底率降为好
+    document.getElementById('kpi-aihandled').textContent = (d.handlingDistribution ? d.handlingDistribution.ai : 0) + ' 单';
+    setKpiTrend('kpi-aihandled-trend', null, false);
 
     // 本周柱状图：直接查 trend 接口
     renderWeekChartFromTrend();
 
+    // 图表区渲染
+    renderTrendChart();
+    renderDistChart(d);
+    renderSatChart();
+    renderFallbackChart();
+
+    // 列表区
+    renderBadReviewList();
+    renderUnansweredTop();
+
     loadKbSummary();
   } catch(e) {
-    document.getElementById('stat-convs').textContent = '—';
-    document.getElementById('stat-msgs').textContent = '—';
-    document.getElementById('stat-ai').textContent = '—';
-    document.getElementById('stat-sat').textContent = '—';
+    document.querySelectorAll('#tab-dashboard .kpi-value').forEach(el => { el.textContent = '—'; });
     document.getElementById('week-chart').innerHTML = '<div class="empty" style="width:100%;align-self:center;">加载失败：' + esc(e.message) + '</div>';
   }
 }
@@ -872,6 +997,201 @@ function renderWeekChartFromTrend() {
     }).join('');
   }).catch(() => {
     el.innerHTML = '<div class="empty" style="width:100%;align-self:center;">本周暂无数据</div>';
+  });
+}
+
+// ===== 图表区渲染（Chart.js，带降级守卫） =====
+window._adminCharts = {};
+
+function destroyChart(key) {
+  if (window._adminCharts[key]) {
+    window._adminCharts[key].destroy();
+    delete window._adminCharts[key];
+  }
+}
+
+function chartTheme() {
+  const cs = getComputedStyle(document.documentElement);
+  const get = (v, fb) => (cs.getPropertyValue(v) || fb).trim();
+  return {
+    primary: get('--primary', '#2563eb'),
+    success: get('--success', '#16a34a'),
+    warning: get('--warning', '#f59e0b'),
+    danger: get('--danger', '#dc2626'),
+    gray400: get('--gray-400', '#9ca3af'),
+    gray700: get('--gray-700', '#374151'),
+  };
+}
+
+// 近7日对话+消息双柱
+function renderTrendChart() {
+  const canvas = document.getElementById('chart-trend');
+  if (!canvas || typeof Chart === 'undefined') return;
+  destroyChart('trend');
+  apiFetch(API + '/stats/trend?days=7').then(res => res.json()).then(result => {
+    if (!result.success || !result.data || !result.data.length) return;
+    const d = result.data;
+    const th = chartTheme();
+    window._adminCharts.trend = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: d.map(x => x.date.slice(5) + ' ' + (x.weekday || '')),
+        datasets: [
+          { label: '对话', data: d.map(x => x.conversations || 0), backgroundColor: th.primary, borderRadius: 4 },
+          { label: '消息', data: d.map(x => x.messages || 0), backgroundColor: th.warning, borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: th.gray700 } } },
+        scales: {
+          x: { ticks: { color: th.gray400, maxRotation: 45, font: { size: 11 } }, grid: { display: false } },
+          y: { ticks: { color: th.gray400 }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true },
+        },
+      },
+    });
+  }).catch(() => {});
+}
+
+// AI/人工 doughnut
+function renderDistChart(overview) {
+  const canvas = document.getElementById('chart-dist');
+  if (!canvas || typeof Chart === 'undefined') return;
+  destroyChart('dist');
+  const hd = (overview && overview.handlingDistribution) || {};
+  const ai = hd.ai || 0;
+  const human = hd.human || 0;
+  if (ai + human === 0) return;
+  const th = chartTheme();
+  window._adminCharts.dist = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['AI 处理', '人工处理'],
+      datasets: [{ data: [ai, human], backgroundColor: [th.primary, th.warning], borderWidth: 0 }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: { legend: { position: 'bottom', labels: { color: th.gray700, padding: 14 } } },
+    },
+  });
+}
+
+// 满意度分布 bar
+function renderSatChart() {
+  const canvas = document.getElementById('chart-sat');
+  if (!canvas || typeof Chart === 'undefined') return;
+  destroyChart('sat');
+  apiFetch(API + '/stats/satisfaction').then(res => res.json()).then(result => {
+    if (!result.success || !result.data || !result.data.distribution) return;
+    const dist = result.data.distribution;
+    const th = chartTheme();
+    const colors = [th.danger, th.warning, '#fbbf24', th.success, '#4ade80'];
+    window._adminCharts.sat = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: dist.map(x => x.label || (x.score + '星')),
+        datasets: [{
+          label: '评价数',
+          data: dist.map(x => x.count || 0),
+          backgroundColor: dist.map((x, i) => colors[i] || th.primary),
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: th.gray400, font: { size: 11 } }, grid: { display: false } },
+          y: { ticks: { color: th.gray400 }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true },
+        },
+      },
+    });
+  }).catch(() => {});
+}
+
+// 兜底率趋势 line
+function renderFallbackChart() {
+  const canvas = document.getElementById('chart-fallback');
+  if (!canvas || typeof Chart === 'undefined') return;
+  destroyChart('fallback');
+  apiFetch(API + '/stats/knowledge-hit-rate?days=14').then(res => res.json()).then(result => {
+    if (!result.success || !result.data || !result.data.length) return;
+    const d = result.data;
+    const th = chartTheme();
+    window._adminCharts.fallback = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: d.map(x => x.date.slice(5)),
+        datasets: [
+          { label: '兜底率 %', data: d.map(x => x.fallbackRate || 0), borderColor: th.danger, backgroundColor: 'rgba(220,38,38,0.08)', fill: true, tension: 0.35, pointRadius: 2 },
+          { label: '知识库命中 %', data: d.map(x => x.hitRate || 0), borderColor: th.success, backgroundColor: 'rgba(22,163,74,0.08)', fill: true, tension: 0.35, pointRadius: 2 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: th.gray700, font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: th.gray400, maxRotation: 45, font: { size: 11 } }, grid: { display: false } },
+          y: { ticks: { color: th.gray400, callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true, max: 100 },
+        },
+      },
+    });
+  }).catch(() => {});
+}
+
+// ===== 列表区：差评会话 =====
+function renderBadReviewList() {
+  const el = document.getElementById('bad-review-list');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state"><span class="empty-icon">📉</span><div class="empty-title">加载中...</div></div>';
+  apiFetch(API + '/stats/satisfaction').then(res => res.json()).then(result => {
+    if (!result.success) throw new Error('加载失败');
+    const all = (result.data && result.data.comments) || [];
+    const bad = all.filter(c => c.score <= 2);
+    if (bad.length === 0) {
+      el.innerHTML = '<div class="empty-state"><span class="empty-icon">🎉</span><div class="empty-title">暂无差评</div><div class="empty-desc">继续保持良好服务</div></div>';
+      return;
+    }
+    el.innerHTML = bad.map(c => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--gray-100);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span class="badge badge-danger">${'★'.repeat(c.score)||''} ${c.score}分</span>
+          <span class="text-xs text-muted">${esc(fmtTime(c.date))}</span>
+        </div>
+        <div style="font-size:13px;color:var(--gray-700);line-height:1.5;">${esc(c.comment || '（无文字反馈）')}</div>
+      </div>`).join('');
+  }).catch(() => {
+    el.innerHTML = '<div class="empty-state"><span class="empty-icon">⚠️</span><div class="empty-title">加载失败</div></div>';
+  });
+}
+
+// ===== 列表区：高频未答 TOP =====
+function renderUnansweredTop() {
+  const el = document.getElementById('unanswered-top-list');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state"><span class="empty-icon">📝</span><div class="empty-title">加载中...</div></div>';
+  apiFetch(API + '/stats/unanswered-trend?days=30').then(res => res.json()).then(result => {
+    if (!result.success) throw new Error('加载失败');
+    const top = (result.data && result.data.topPending) || [];
+    if (top.length === 0) {
+      el.innerHTML = '<div class="empty-state"><span class="empty-icon">✅</span><div class="empty-title">暂无未答问题</div><div class="empty-desc">知识库覆盖良好</div></div>';
+      return;
+    }
+    el.innerHTML = top.slice(0, 10).map((q, i) => `
+      <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--gray-100);align-items:flex-start;">
+        <span class="badge ${i < 3 ? 'badge-warning' : 'badge-gray'}">#${i + 1}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;color:var(--gray-800);line-height:1.4;">${esc(q.query || q.text || '')}</div>
+          <div class="text-xs text-muted">提问 ${q.count || 0} 次</div>
+        </div>
+      </div>`).join('');
+  }).catch(() => {
+    el.innerHTML = '<div class="empty-state"><span class="empty-icon">⚠️</span><div class="empty-title">加载失败</div></div>';
   });
 }
 
@@ -957,6 +1277,143 @@ async function viewConversation(id) {
       </div>`).join('');
   } catch(e) {
     detail.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+/* ===== 待补充知识（知识库反馈闭环） ===== */
+async function loadUnanswered() {
+  const listEl = document.getElementById('unanswered-list');
+  const emptyEl = document.getElementById('unanswered-empty');
+  listEl.innerHTML = '';
+
+  try {
+    const [listRes, statsRes] = await Promise.all([
+      apiFetch(API + '/unanswered?status=pending'),
+      apiFetch(API + '/unanswered/stats')
+    ]);
+    const list = await listRes.json();
+    const stats = await statsRes.json();
+
+    if (stats.success) {
+      document.getElementById('ua-pending').textContent = stats.pending ?? 0;
+      document.getElementById('ua-added').textContent = stats.added ?? 0;
+      document.getElementById('ua-dismissed').textContent = stats.dismissed ?? 0;
+    }
+
+    if (!list.success || !list.data || list.data.length === 0) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    for (const item of list.data) {
+      const firstSeen = (item.first_seen || '').replace('T', ' ').slice(0, 16);
+      const lastSeen = (item.last_seen || '').replace('T', ' ').slice(0, 16);
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;transition:all .2s;';
+      card.onmouseenter = () => { card.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'; card.style.borderColor = '#d0d0d0'; };
+      card.onmouseleave = () => { card.style.boxShadow = 'none'; card.style.borderColor = '#e8e8e8'; };
+      card.innerHTML = `
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:15px;font-weight:600;color:#222;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            <span style="color:#e53e3e;font-weight:700;margin-right:6px;">Q</span> ${esc(item.query)}
+          </div>
+          <div style="display:flex;gap:16px;font-size:12px;color:#888;">
+            <span>🔄 出现 <strong style="color:#e67e22;">${item.count}</strong> 次</span>
+            <span>📅 首次 ${firstSeen}</span>
+            <span>🕐 最近 ${lastSeen}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-left:16px;flex-shrink:0;">
+          <button class="btn btn-primary btn-sm" onclick="showAnswerModal('${item.id}', '${esc(item.query)}')">✏️ 补充答案</button>
+          <button class="btn btn-secondary btn-sm" onclick="dismissUnanswered('${item.id}')">忽略</button>
+        </div>
+      `;
+      listEl.appendChild(card);
+    }
+  } catch(e) {
+    listEl.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">加载失败：' + esc(e.message) + '</div>';
+  }
+}
+
+// 补充答案弹窗（精美版）
+function showAnswerModal(id, query) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:90%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,0.15);overflow:hidden;animation:slideUp .25s ease;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px 0;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:20px;">📝</span>
+          <span style="font-size:17px;font-weight:600;color:#222;">补充知识</span>
+        </div>
+        <button onclick="this.closest('[style*=\\'z-index\\']').remove()" style="background:none;border:none;font-size:22px;color:#999;cursor:pointer;padding:4px 8px;border-radius:6px;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='none'">×</button>
+      </div>
+      <div style="padding:20px 24px;">
+        <div style="margin-bottom:16px;">
+          <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">用户提问</label>
+          <div style="background:#f8f9fa;border:1px solid #eee;border-radius:10px;padding:12px 16px;font-size:14px;color:#333;line-height:1.6;">${query}</div>
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:6px;">标准答案 <span style="color:#e53e3e;font-weight:400;">*</span></label>
+          <textarea id="ua-answer-input" style="width:100%;min-height:120px;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px;line-height:1.6;resize:vertical;outline:none;transition:border-color .2s;box-sizing:border-box;" placeholder="请输入标准答案，补充后将自动添加到知识库..." onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e0e0e0'"></textarea>
+        </div>
+        <div id="ua-modal-err" style="color:#e53e3e;font-size:13px;margin-top:10px;display:none;"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 20px;">
+        <button class="btn btn-secondary" onclick="this.closest('[style*=\\'z-index\\']').remove()" style="min-width:80px;">取消</button>
+        <button class="btn btn-primary" onclick="approveUnanswered('${id}')" id="ua-submit-btn" style="min-width:120px;">✅ 添加到知识库</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+async function approveUnanswered(id) {
+  const answer = document.getElementById('ua-answer-input').value.trim();
+  const errEl = document.getElementById('ua-modal-err');
+  const btn = document.getElementById('ua-submit-btn');
+  if (!answer) {
+    errEl.textContent = '请填写标准答案';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = '添加中...';
+
+  try {
+    const res = await apiFetch(API + '/unanswered/approve/' + id, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer })
+    });
+    const d = await res.json();
+    if (d.success) {
+      btn.closest('.modal').remove();
+      loadUnanswered();
+    } else {
+      errEl.textContent = d.error || '操作失败';
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '✅ 添加到知识库';
+    }
+  } catch(e) {
+    errEl.textContent = '网络错误：' + e.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = '✅ 添加到知识库';
+  }
+}
+
+async function dismissUnanswered(id) {
+  if (!confirm('确定忽略这条记录？')) return;
+  try {
+    await apiFetch(API + '/unanswered/dismiss/' + id, { method: 'POST' });
+    loadUnanswered();
+  } catch(e) {
+    alert('操作失败：' + e.message);
   }
 }
 
@@ -1071,6 +1528,70 @@ async function deleteKb(id, name) {
     loadKnowledge();
   } catch(e) {
     toast('删除失败：' + e.message, 'error');
+  }
+}
+
+/* ===== AI知识库扩写 ===== */
+async function batchAIExpand() {
+  const LANGCHAIN_URL = localStorage.getItem('langchain_url') || 'http://localhost:8000';
+  try {
+    const res = await apiFetch('/api/knowledge');
+    if (!res.ok) throw new Error('获取知识库失败');
+    const result = await res.json();
+    const items = result.data || result.knowledge || [];
+    if (!items.length) { toast('知识库为空', 'error'); return; }
+
+    const batch = items.slice(0, 5);
+    let html = '';
+    toast(`AI扩写中...`, 'info');
+
+    for (let i = 0; i < batch.length; i++) {
+      const item = batch[i];
+      try {
+        const resp = await fetch(`${LANGCHAIN_URL}/api/kb/expand`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: item.question, answer: item.answer }),
+        });
+        const data = await resp.json();
+        if (data.success && data.data) {
+          const d = data.data;
+          html += `<div style="margin-bottom:12px;padding:14px;background:#f8f9fa;border-radius:10px;border:1px solid #eee;">
+            <div style="font-weight:600;color:#222;margin-bottom:8px;font-size:14px;">${esc(item.question)}</div>
+            <div style="font-size:12px;margin-bottom:6px;color:#555;">
+              <span style="color:#e67e22;font-weight:500;">同义问法</span>
+              <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">${(d.synonyms||[]).map(s => `<span style="background:#fef3e2;padding:3px 10px;border-radius:12px;font-size:12px;">${esc(s)}</span>`).join('')}</div>
+            </div>
+            <div style="font-size:12px;color:#555;">
+              <span style="color:#10b981;font-weight:500;">关键词</span>
+              <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">${(d.keywords||[]).map(k => `<span style="background:#e8f5e9;padding:3px 10px;border-radius:12px;font-size:12px;">${esc(k)}</span>`).join('')}</div>
+            </div>
+          </div>`;
+        }
+      } catch (e) {
+        html += `<div style="padding:8px;color:#e53e3e;font-size:13px;">${esc(item.question)}: ${esc(e.message)}</div>`;
+      }
+    }
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:16px;width:90%;max-width:620px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.15);">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;">
+          <span style="font-size:17px;font-weight:600;">🤖 AI 扩写预览</span>
+          <button onclick="this.closest('[style*=\\'z-index\\']').remove()" style="background:none;border:none;font-size:22px;color:#999;cursor:pointer;padding:4px 8px;border-radius:6px;">×</button>
+        </div>
+        <div style="padding:20px 24px;">${html || '<div style="text-align:center;padding:20px;color:#999;">暂无结果</div>'}</div>
+        <div style="padding:0 24px 20px;text-align:center;font-size:12px;color:#aaa;line-height:1.6;">
+          AI 自动生成的同义问法和关键词，可参考后手动添加到知识库
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    toast('✅ 扩写完成', 'success');
+  } catch (e) {
+    toast('AI扩写失败：' + e.message, 'error');
   }
 }
 
@@ -1287,188 +1808,93 @@ function saveSettings() {
   toast('基本设置已保存');
 }
 
-// 选择AI提供商（单选模式）
-function selectAIProvider(provider) {
-  document.getElementById(`cfg-${provider}-enabled`).checked = true;
-  onProviderChange(provider);
+// 备用模型折叠开关
+function toggleFallback() {
+  const enabled = document.getElementById('cfg-fallback-enabled').checked;
+  document.getElementById('cfg-fallback-body').style.display = enabled ? 'block' : 'none';
 }
 
-// 当提供商选择变化时
-function onProviderChange(provider) {
-  // 单选模式：选择一个自动取消另一个
-  const otherProvider = provider === 'zhipu' ? 'deepseek' : 'zhipu';
-  document.getElementById(`cfg-${otherProvider}-enabled`).checked = false;
-  
-  // 更新UI状态
-  updateProviderUI(provider);
-  updateProviderUI(otherProvider);
-}
-
-// 更新提供商UI状态
-function updateProviderUI(provider) {
-  const enabled = document.getElementById(`cfg-${provider}-enabled`).checked;
-  const card = document.getElementById(`cfg-${provider}-enabled`).closest('.form-group');
-  
-  if (enabled) {
-    card.style.background = '#eff6ff';
-    card.style.border = '1px solid #2563eb';
-  } else {
-    card.style.background = '#f9fafb';
-    card.style.border = 'none';
-  }
-}
-
-// 保存智谱AI配置
-async function saveZhipuConfig() {
-  const apiKey = document.getElementById('cfg-zhipu-apikey').value.trim();
-  const model = document.getElementById('cfg-zhipu-model').value;
-  const enabled = document.getElementById('cfg-zhipu-enabled').checked;
-  
-  if (enabled && !apiKey) {
-    toast('请输入API Key', 'error');
+// 保存AI配置（主模型 + 备用模型）
+async function saveAIConfig() {
+  const llm = {
+    provider: document.getElementById('cfg-llm-provider').value.trim(),
+    baseUrl: document.getElementById('cfg-llm-baseurl').value.trim(),
+    apiKey: document.getElementById('cfg-llm-apikey').value.trim(),
+    model: document.getElementById('cfg-llm-model').value.trim(),
+    temperature: parseFloat(document.getElementById('cfg-llm-temperature').value) || 0.7
+  };
+  if (!llm.baseUrl || !llm.model) {
+    toast('请填写 Base URL 和 Model', 'error');
     return;
   }
-  
+
+  // 备用模型：仅在启用时提交
+  let fallback = null;
+  if (document.getElementById('cfg-fallback-enabled').checked) {
+    fallback = {
+      baseUrl: document.getElementById('cfg-fallback-baseurl').value.trim(),
+      apiKey: document.getElementById('cfg-fallback-apikey').value.trim(),
+      model: document.getElementById('cfg-fallback-model').value.trim()
+    };
+  }
+
   try {
-    // 如果启用智谱AI，先禁用DeepSeek（单选模式）
-    if (enabled) {
-      await apiFetch(API + '/config/ai/disable', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'deepseek' })
-      });
-    }
-    
-    const res = await apiFetch(API + '/config/ai/zhipu', {
+    const res = await apiFetch(API + '/config/ai/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey, model, enabled })
+      body: JSON.stringify({ llm, fallback })
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.message || '保存失败');
-    toast('智谱AI配置已保存');
-    // 保留API密钥在输入框中，不清空
-    
-    // 保存成功后显示测试按钮
-    if (enabled && apiKey) {
-      document.getElementById('zhipu-test-btn').style.display = 'block';
-    }
-    
+    toast('AI 配置已保存');
+    // 清空密码框（避免残留敏感信息），重新加载
+    document.getElementById('cfg-llm-apikey').value = '';
+    document.getElementById('cfg-fallback-apikey').value = '';
     loadAIConfig();
   } catch(e) {
     toast('保存失败：' + e.message, 'error');
   }
 }
 
-// 保存DeepSeek配置
-async function saveDeepseekConfig() {
-  const apiKey = document.getElementById('cfg-deepseek-apikey').value.trim();
-  const model = document.getElementById('cfg-deepseek-model').value;
-  const enabled = document.getElementById('cfg-deepseek-enabled').checked;
-  
-  if (enabled && !apiKey) {
-    toast('请输入API Key', 'error');
+// 测试AI连接（直接用表单当前值测试，不依赖已保存状态）
+async function testAIConnection(scope) {
+  const isLlm = scope === 'llm';
+  const resultEl = document.getElementById(`${scope}-test-result`);
+  const testBtn = document.getElementById(`${scope}-test-btn`);
+  const baseUrl = document.getElementById(`cfg-${scope}-baseurl`).value.trim();
+  const apiKey = document.getElementById(`cfg-${scope}-apikey`).value.trim();
+  const model = document.getElementById(`cfg-${scope}-model`).value.trim();
+
+  if (!baseUrl || !apiKey || !model) {
+    toast('请先填写 Base URL / API Key / Model', 'error');
     return;
   }
-  
-  try {
-    // 如果启用DeepSeek，先禁用智谱AI（单选模式）
-    if (enabled) {
-      await apiFetch(API + '/config/ai/disable', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'zhipu' })
-      });
-    }
-    
-    const res = await apiFetch(API + '/config/ai/deepseek', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey, model, enabled })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message || '保存失败');
-    toast('DeepSeek配置已保存');
-    // 保留API密钥在输入框中，不清空
-    
-    // 保存成功后显示测试按钮
-    if (enabled && apiKey) {
-      document.getElementById('deepseek-test-btn').style.display = 'block';
-    }
-    
-    loadAIConfig();
-  } catch(e) {
-    toast('保存失败：' + e.message, 'error');
-  }
-}
 
-// 保存默认提供商
-async function saveDefaultProvider() {
-  const provider = document.getElementById('cfg-default-provider').value;
-  try {
-    const res = await apiFetch(API + '/config/ai/default-provider', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message || '设置失败');
-    toast('默认AI已设置为：' + (provider === 'zhipu' ? '智谱AI' : 'DeepSeek'));
-  } catch(e) {
-    toast('设置失败：' + e.message, 'error');
-  }
-}
-
-// 测试AI连接
-async function testAIProvider(provider) {
-  const resultEl = document.getElementById(`${provider}-test-result`);
-  const badgeEl = document.getElementById(`${provider}-connected-badge`);
-  const testBtn = document.getElementById(`${provider}-test-btn`);
-  
   resultEl.style.display = 'block';
   resultEl.innerHTML = '<span style="color:#6b7280;">测试中...</span>';
-  // 测试期间禁用测试按钮
   testBtn.disabled = true;
   testBtn.style.opacity = '0.6';
-  
+
   try {
     const res = await apiFetch(API + '/config/ai/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider })
-    }, 20000);
-    
-    // 检查HTTP响应状态
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error('服务器错误(' + res.status + '): ' + errorText);
-    }
-    
+      body: JSON.stringify({ baseUrl, apiKey, model })
+    }, 25000);
     const data = await res.json();
-    log('测试' + provider + '结果:', data);
-    
     if (data.success) {
-      // 测试成功：显示已连接，隐藏测试按钮
       resultEl.innerHTML = '<span style="color:#16a34a;">✅ ' + esc(data.message || '连接成功') + '</span>';
-      badgeEl.style.display = 'inline-flex';
-      testBtn.style.display = 'none';
-      toast(provider === 'zhipu' ? '智谱AI连接成功' : 'DeepSeek连接成功');
+      toast((isLlm ? '主模型' : '备用模型') + '连接成功');
     } else {
-      // 测试失败：保留测试按钮，提示重试
       resultEl.innerHTML = '<span style="color:#dc2626;">❌ ' + esc(data.message || '测试失败') + '，请检查后重试</span>';
-      badgeEl.style.display = 'none';
-      testBtn.disabled = false;
-      testBtn.style.opacity = '1';
-      testBtn.textContent = '🧪 重新测试';
+      toast((isLlm ? '主模型' : '备用模型') + '连接失败', 'error');
     }
   } catch(e) {
-    logErr('测试' + provider + '失败:', e);
-    // 网络/服务器错误：保留测试按钮，提示重试
+    logErr('测试连接失败:', e);
     resultEl.innerHTML = '<span style="color:#dc2626;">❌ ' + esc(e.message) + '，请检查后重试</span>';
-    badgeEl.style.display = 'none';
+  } finally {
     testBtn.disabled = false;
     testBtn.style.opacity = '1';
-    testBtn.textContent = '🧪 重新测试';
   }
 }
 
@@ -1479,52 +1905,33 @@ async function loadAIConfig() {
     const data = await res.json();
     if (data.success && data.data) {
       const cfg = data.data;
-      // 智谱AI
-      const zhipuEnabled = cfg.zhipu?.enabled || false;
-      document.getElementById('cfg-zhipu-enabled').checked = zhipuEnabled;
-      document.getElementById('cfg-zhipu-model').value = cfg.zhipu?.model || 'glm-4-flash';
-      // 填充API Key到输入框（如果有）
-      if (cfg.zhipu?.apiKey) {
-        document.getElementById('cfg-zhipu-apikey').value = cfg.zhipu.apiKey;
+      // 主模型
+      document.getElementById('cfg-llm-provider').value = cfg.llm?.provider || '';
+      document.getElementById('cfg-llm-baseurl').value = cfg.llm?.baseUrl || '';
+      document.getElementById('cfg-llm-model').value = cfg.llm?.model || '';
+      document.getElementById('cfg-llm-temperature').value = cfg.llm?.temperature ?? 0.7;
+      const llmKey = cfg.llm?.apiKey || '';
+      const llmMasked = cfg.llm?.apiKeyMasked || '';
+      const llmKeyInput = document.getElementById('cfg-llm-apikey');
+      llmKeyInput.value = '';
+      llmKeyInput.placeholder = llmMasked ? ('已保存：' + llmMasked + '，留空保持不变') : 'API Key';
+
+      // 备用模型
+      const fbKey = cfg.fallback?.apiKey || '';
+      const fbMasked = cfg.fallback?.apiKeyMasked || '';
+      const hasFallback = !!(cfg.fallback?.baseUrl || fbKey || cfg.fallback?.model);
+      document.getElementById('cfg-fallback-enabled').checked = hasFallback;
+      if (hasFallback) {
+        document.getElementById('cfg-fallback-baseurl').value = cfg.fallback?.baseUrl || '';
+        document.getElementById('cfg-fallback-model').value = cfg.fallback?.model || '';
       }
-      // DeepSeek
-      const deepseekEnabled = cfg.deepseek?.enabled || false;
-      document.getElementById('cfg-deepseek-enabled').checked = deepseekEnabled;
-      document.getElementById('cfg-deepseek-model').value = cfg.deepseek?.model || 'deepseek-chat';
-      // 填充API Key到输入框（如果有）
-      if (cfg.deepseek?.apiKey) {
-        document.getElementById('cfg-deepseek-apikey').value = cfg.deepseek.apiKey;
-      }
-      // 默认提供商
-      document.getElementById('cfg-default-provider').value = cfg.defaultProvider || 'zhipu';
-      
-      // 更新UI状态
-      updateProviderUI('zhipu');
-      updateProviderUI('deepseek');
-      
-      // 根据是否有API Key显示/隐藏测试按钮
-      const zhipuHasKey = cfg.zhipu?.apiKey && cfg.zhipu.apiKey.length > 0;
-      const deepseekHasKey = cfg.deepseek?.apiKey && cfg.deepseek.apiKey.length > 0;
-      
-      // 智谱AI：已保存密钥且启用时显示测试按钮
-      if (zhipuEnabled && zhipuHasKey) {
-        document.getElementById('zhipu-test-btn').style.display = 'block';
-      } else {
-        document.getElementById('zhipu-test-btn').style.display = 'none';
-        document.getElementById('zhipu-connected-badge').style.display = 'none';
-      }
-      
-      // DeepSeek：已保存密钥且启用时显示测试按钮
-      if (deepseekEnabled && deepseekHasKey) {
-        document.getElementById('deepseek-test-btn').style.display = 'block';
-      } else {
-        document.getElementById('deepseek-test-btn').style.display = 'none';
-        document.getElementById('deepseek-connected-badge').style.display = 'none';
-      }
-      
-      // 更新状态
-      const anyEnabled = (zhipuEnabled && zhipuHasKey) || (deepseekEnabled && deepseekHasKey);
-      updateAIStatusBadge(anyEnabled);
+      const fbKeyInput = document.getElementById('cfg-fallback-apikey');
+      fbKeyInput.value = '';
+      fbKeyInput.placeholder = fbMasked ? ('已保存：' + fbMasked + '，留空保持不变') : '备用 API Key';
+      toggleFallback();
+
+      // 状态徽章
+      updateAIStatusBadge(!!(llmKey || fbKey));
     }
   } catch(e) {
     log('加载AI配置失败:', e);
@@ -1569,18 +1976,26 @@ window.addEventListener('pageshow', function(e) {
   const savedAuth = localStorage.getItem('authHeader');
   const savedUser = localStorage.getItem('currentUser');
   const loginModal = document.getElementById('login-modal');
-  if (savedAuth && savedUser && !isLoggedIn) {
-    // localStorage 有凭证且当前未登录 → 恢复登录状态
+  // 校验凭证格式：只认 Bearer JWT（旧 Basic 凭证直接作废）
+  const validAuth = savedAuth && savedAuth.startsWith('Bearer ');
+  if (validAuth && savedUser && !isLoggedIn) {
+    // localStorage 有有效凭证且当前未登录 → 恢复登录状态
     authHeader = savedAuth;
     currentUser = savedUser;
     isLoggedIn = true;
     loginModal.style.display = 'none';
     initApp();
-  } else if (!savedAuth || !savedUser) {
-    // 无凭证，显示登录框
+  } else {
+    // 无凭证或凭证已过期格式 → 清掉并显示登录框
+    if (savedAuth) {
+      localStorage.removeItem('authHeader');
+      localStorage.removeItem('currentUser');
+    }
+    authHeader = '';
+    currentUser = '';
+    isLoggedIn = false;
     loginModal.style.display = 'flex';
   }
-  // 已登录的情况：什么都不做，避免重复 initApp
 });
 async function loadBrandConfig() {
   try {
@@ -1757,7 +2172,8 @@ async function resetBrandConfig() {
   (function checkLoginOnLoad() {
     const savedAuth = localStorage.getItem('authHeader');
     const savedUser = localStorage.getItem('currentUser');
-    if (savedAuth && savedUser) {
+    // 只认 Bearer JWT（旧 Basic 凭证直接作废，防止 401 循环）
+    if (savedAuth && savedAuth.startsWith('Bearer ') && savedUser) {
       // localStorage 有凭证 → 直接恢复登录状态，无需调接口验证
       authHeader = savedAuth;
       currentUser = savedUser;
@@ -1765,7 +2181,12 @@ async function resetBrandConfig() {
       document.getElementById('login-modal').style.display = 'none';
       initApp();
     } else {
-      // 无凭证 → 显示登录框
+      // 无凭证或凭证格式无效 → 清理并显示登录框
+      localStorage.removeItem('authHeader');
+      localStorage.removeItem('currentUser');
+      authHeader = '';
+      currentUser = '';
+      isLoggedIn = false;
       document.getElementById('login-modal').style.display = 'flex';
     }
   })();

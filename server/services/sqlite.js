@@ -1,7 +1,31 @@
 /**
  * SQLite 核心数据库模块
- * 使用 better-sqlite3，WAL 模式支持并发读写
+ * 使用 better-sqlite3（WAL 模式支持并发读写）
+ * 当 DB_TYPE=postgres 时自动切换到 PostgreSQL
  */
+
+// ===== 双引擎切换 =====
+if (process.env.DB_TYPE === 'postgres') {
+  const pg = require('./pg');
+  // 异步适配：包装 pg.query 为类 better-sqlite3 同步接口
+  // 注意：调用方需在 async 上下文中使用 await db.xxx()
+  const db = {
+    _pg: true,
+    prepare: (sql) => ({
+      all: (...params) => pg.query(sql, params),
+      get: (...params) => pg.queryOne(sql, params),
+      run: (...params) => pg.execute(sql, params),
+    }),
+    exec: (sql) => pg.execute(sql),
+    transaction: (fn) => pg.transaction(fn),
+    pragma: () => {},              // PG 不需要
+    backup: () => {},              // PG 用 pg_dump
+    healthCheck: () => pg.healthCheck(),
+  };
+  console.log('[DB] 使用 PostgreSQL 引擎');
+  module.exports = db;
+  return;
+}
 
 const Database = require('better-sqlite3');
 const path = require('path');
@@ -12,13 +36,13 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, 'service.db');
+const dbPath = process.env.SQLITE_DB_PATH || path.join(dataDir, 'service.db');
 
 // 创建数据库连接
 const db = new Database(dbPath);
 
-// 启用 WAL 模式（支持并发读写，性能更好）
-db.pragma('journal_mode = WAL');
+// 启用 WAL 模式（如失败则回退到 DELETE 模式）
+try { db.pragma('journal_mode = WAL'); } catch (e) { console.error('[SQLite] WAL 模式设置失败:', e.message); }
 db.pragma('foreign_keys = ON');
 
 // 初始化表结构
@@ -76,15 +100,86 @@ function initSchema() {
     )
   `);
 
-  // 创建索引（加速查询）
+  // 未匹配查询（知识库反馈闭环）
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_conversations_visitor ON conversations(visitor_id);
-    CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
-    CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
-    CREATE INDEX IF NOT EXISTS idx_ratings_conversation ON ratings(conversation_id);
+    CREATE TABLE IF NOT EXISTS unanswered_queries (
+      id TEXT PRIMARY KEY,
+      query TEXT NOT NULL,
+      count INTEGER DEFAULT 1,
+      first_seen TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      answer TEXT,
+      created_by TEXT,
+      created_at TEXT
+    )
   `);
 
+  // 订单模拟表（用于任务执行工具演示）
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY,
+        user_phone TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT,
+        start_location TEXT,
+        end_location TEXT,
+        fee REAL DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        bike_id TEXT,
+        created_at TEXT NOT NULL
+      )
+    `);
+  } catch (e) {
+    if (e.code !== 'SQLITE_READONLY') console.error('[SQLite] 创建 orders 表失败:', e.message);
+  }
+
+  // 操作审计日志（Agent 写操作留痕）
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS action_logs (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        visitor_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        params TEXT,
+        result TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at TEXT NOT NULL
+      )
+    `);
+  } catch (e) {
+    if (e.code !== 'SQLITE_READONLY') console.error('[SQLite] 创建 action_logs 表失败:', e.message);
+  }
+
+  // 创建索引（加速查询）
+  try {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_conversations_visitor ON conversations(visitor_id);
+      CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
+      CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+      CREATE INDEX IF NOT EXISTS idx_ratings_conversation ON ratings(conversation_id);
+      CREATE INDEX IF NOT EXISTS idx_unanswered_status ON unanswered_queries(status);
+      CREATE INDEX IF NOT EXISTS idx_unanswered_query ON unanswered_queries(query);
+      CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(user_phone);
+      CREATE INDEX IF NOT EXISTS idx_action_logs_conversation ON action_logs(conversation_id);
+    `);
+  } catch (e) {
+    if (e.code !== 'SQLITE_READONLY') console.error('[SQLite] 创建索引失败:', e.message);
+  }
+
   console.log('[SQLite] 数据库表初始化完成');
+}
+
+// 迁移：新增 source 列（幂等）
+function migrateAddSourceColumn() {
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN source TEXT DEFAULT NULL");
+    console.log('[SQLite] 消息表新增 source 列');
+  } catch (_) {
+    // 列已存在，忽略
+  }
 }
 
 // 执行迁移（从 JSON 文件迁移数据）
@@ -164,7 +259,47 @@ function migrateFromJSON() {
 
 // 初始化
 initSchema();
+migrateAddSourceColumn();
 migrateFromJSON();
+
+// ===== 预填订单模拟数据（用于任务执行工具演示）=====
+function seedOrders() {
+  try {
+    const count = db.prepare('SELECT COUNT(*) as cnt FROM orders').get();
+    if (count.cnt > 0) return;
+
+  const now = new Date().toISOString();
+  const day = (offset) => {
+    const d = new Date(new Date().getTime() - offset * 24 * 3600 * 1000);
+    return d.toISOString();
+  };
+
+  const sampleOrders = [
+    { id: 'R20260801', phone: '13800000001', start: day(3), end: day(3), startLoc: '万达广场', endLoc: '中山路', fee: 1.5, status: 'completed', bike: 'B001' },
+    { id: 'R20260802', phone: '13800000001', start: day(2), end: day(2), startLoc: '地铁站A口', endLoc: '科技园', fee: 2.5, status: 'completed', bike: 'B003' },
+    { id: 'R20260803', phone: '13800000001', start: day(1), end: null, startLoc: '学校东门', endLoc: null, fee: 0, status: 'active', bike: 'B005' },
+    { id: 'R20260804', phone: '13800000001', start: day(0), end: day(0), startLoc: '商业街', endLoc: '万达广场', fee: 1.5, status: 'completed', bike: 'B001' },
+    { id: 'R20260805', phone: '13800000001', start: day(2), end: null, startLoc: '火车站南广场', endLoc: null, fee: 8.0, status: 'pending', bike: 'B007' },
+  ];
+
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO orders (id, user_phone, start_time, end_time, start_location, end_location, fee, status, bike_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertAll = db.transaction(() => {
+    for (const o of sampleOrders) {
+      stmt.run(o.id, o.phone, o.start, o.end, o.startLoc, o.endLoc, o.fee, o.status, o.bike, now);
+    }
+  });
+  insertAll();
+  console.log(`[SQLite] 预填订单模拟数据: ${sampleOrders.length} 条`);
+  } catch (e) {
+    if (e.code !== 'SQLITE_READONLY') console.error('[SQLite] 预填订单数据失败:', e.message);
+  }
+}
+
+seedOrders();
 
 // ===== 数据库自动备份（每日凌晨3点，保留最近7天）=====
 const backupDir = path.join(__dirname, '../data/backups');

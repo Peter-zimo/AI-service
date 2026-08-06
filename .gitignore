@@ -35,4 +35,3 @@ archive/
 # 知识库临时导出
 *.xlsx
 *.csv
-!server/data/

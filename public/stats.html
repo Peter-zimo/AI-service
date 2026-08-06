@@ -3,172 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>数据统计 - AI智能客服</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --primary: #2563eb;
-      --primary-dark: #1d4ed8;
-      --primary-light: #bfdbfe;
-      --primary-bg: #eff6ff;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
-      --gray-300: #d1d5db; --gray-400: #9ca3af; --gray-500: #6b7280;
-      --gray-600: #4b5563; --gray-700: #374151; --gray-800: #1f2937;
-      --radius: 12px; --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Noto Sans SC', -apple-system, sans-serif; background: #f0f2f5; color: var(--gray-800); min-height: 100vh; }
-
-    /* 顶部导航 */
-    .navbar {
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-      color: #fff; padding: 14px 24px;
-      display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(37,99,235,0.25);
-    }
-    .navbar h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-    .navbar-actions { display: flex; gap: 10px; }
-    .nav-btn {
-      background: rgba(255,255,255,0.2); border: none; color: #fff;
-      padding: 7px 16px; border-radius: 20px; font-size: 13px; cursor: pointer;
-      font-family: inherit; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
-    }
-    .nav-btn:hover { background: rgba(255,255,255,0.32); transform: translateY(-1px); }
-
-    /* 主容器 */
-    .container { max-width: 1280px; margin: 0 auto; padding: 20px 24px; }
-
-    /* 概览卡片行 */
-    .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-    .card {
-      background: #fff; border-radius: var(--radius); padding: 20px;
-      box-shadow: var(--shadow); position: relative; overflow: hidden;
-      transition: transform 0.15s, box-shadow 0.15s;
-    }
-    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
-    .card-icon {
-      width: 44px; height: 44px; border-radius: 12px; display: flex;
-      align-items: center; justify-content: center; font-size: 20px; margin-bottom: 12px;
-    }
-    .card-icon.blue { background: var(--primary-bg); color: var(--primary); }
-    .card-icon.green { background: #f0fdf4; color: var(--success); }
-    .card-icon.yellow { background: #fefce8; color: var(--warning); }
-    .card-icon.purple { background: #faf5ff; color: #a855f7; }
-    .card-label { font-size: 13px; color: var(--gray-500); margin-bottom: 4px; }
-    .card-value { font-size: 28px; font-weight: 700; line-height: 1.2; color: var(--gray-800); }
-    .card-sub { font-size: 12px; color: var(--gray-400); margin-top: 6px; display: flex; align-items: center; gap: 4px; }
-    .card-sub.up { color: var(--success); }
-    .card-sub.down { color: var(--danger); }
-
-    /* 图表区域 */
-    .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
-    .chart-card {
-      background: #fff; border-radius: var(--radius); padding: 20px;
-      box-shadow: var(--shadow);
-    }
-    .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .chart-title { font-size: 15px; font-weight: 600; color: var(--gray-800); }
-    .chart-subtitle { font-size: 12px; color: var(--gray-400); }
-    .chart-body { position: relative; height: 280px; }
-
-    /* 第二行图表 */
-    .charts-row2 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-
-    /* 数据表格区 */
-    .table-section { background: #fff; border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px; }
-    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .section-title { font-size: 15px; font-weight: 600; color: var(--gray-800); }
-    .tab-group { display: flex; gap: 4px; background: var(--gray-100); padding: 3px; border-radius: 8px; }
-    .tab-btn {
-      padding: 6px 14px; border: none; background: transparent; border-radius: 6px;
-      font-size: 13px; cursor: pointer; font-family: inherit; color: var(--gray-500);
-      transition: all 0.15s;
-    }
-    .tab-btn.active { background: #fff; color: var(--gray-800); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .tab-btn:hover:not(.active) { color: var(--gray-700); }
-
-    table { width: 100%; border-collapse: collapse; }
-    th {
-      text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 500;
-      color: var(--gray-500); border-bottom: 1px solid var(--gray-200); white-space: nowrap;
-    }
-    td { padding: 10px 14px; font-size: 13px; color: var(--gray-700); border-bottom: 1px solid var(--gray-100); }
-    tr:hover td { background: var(--gray-50); }
-    .badge {
-      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
-    }
-    .badge-active { background: #dcfce7; color: #16a34a; }
-    .badge-idle { background: #fefce8; color: #ca8a04; }
-    .badge-closed { background: #f3f4f6; color: var(--gray-500); }
-    .badge-ai { background: var(--primary-bg); color: var(--primary); }
-    .badge-human { background: #faf5ff; color: #a855f7; }
-    .score-stars { letter-spacing: 1px; }
-    .question-text { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-    /* 分页 */
-    .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 16px; }
-    .page-btn {
-      padding: 6px 12px; border: 1px solid var(--gray-200); background: #fff;
-      border-radius: 6px; font-size: 13px; cursor: pointer; font-family: inherit;
-      color: var(--gray-600); transition: all 0.15s;
-    }
-    .page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
-    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-
-    /* 加载状态 */
-    .loading { text-align: center; padding: 40px; color: var(--gray-400); }
-    .loading-spinner {
-      width: 32px; height: 32px; border: 3px solid var(--gray-200);
-      border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;
-      margin: 0 auto 12px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* 空状态 */
-    .empty-state { text-align: center; padding: 48px 20px; color: var(--gray-400); }
-    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-    .empty-state p { font-size: 14px; }
-
-    /* 刷新时间 */
-    .refresh-info { text-align: right; font-size: 11px; color: var(--gray-400); margin-top: -8px; margin-bottom: 16px; }
-    .refresh-btn {
-      background: none; border: 1px solid var(--gray-200); color: var(--gray-500);
-      padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
-      font-family: inherit; transition: all 0.15s;
-    }
-    .refresh-btn:hover { border-color: var(--primary); color: var(--primary); }
-
-    /* 响应式 */
-    @media (max-width: 1024px) {
-      .cards-row { grid-template-columns: repeat(2, 1fr); }
-      .charts-grid { grid-template-columns: 1fr; }
-      .charts-row2 { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 640px) {
-      .container { padding: 12px; }
-      .cards-row { grid-template-columns: 1fr 1fr; gap: 10px; }
-      .card-value { font-size: 22px; }
-      .navbar { padding: 12px 16px; }
-      .navbar h1 { font-size: 15px; }
-      .chart-body { height: 220px; }
-    }
-  </style>
+<link rel="stylesheet" href="/css/theme.css?v=20260806">
+  <link rel="stylesheet" href="/css/stats.css?v=20260806">
+  <script src="/js/common.js?v=20260806" defer></script>
 </head>
 <body>
 
 <!-- 导航栏 -->
-<div class="navbar">
+<div class="nav">
   <h1>📊 数据统计面板</h1>
-  <div class="navbar-actions">
-    <button class="nav-btn" onclick="refreshAll()">🔄 刷新</button>
-    <button class="nav-btn" onclick="window.open('/api/stats/export/xlsx','_blank')">📤 Excel</button>
-    <button class="nav-btn" onclick="window.open('/api/stats/export/csv','_blank')">📄 CSV</button>
-    <a class="nav-btn" href="/admin.html">⚙️ 返回管理</a>
+  <div class="nav-actions">
+    <button class="nav-action" onclick="refreshAll()">🔄 刷新</button>
+    <button class="nav-action" onclick="window.open('/api/stats/export/xlsx','_blank')">📤 Excel</button>
+    <button class="nav-action" onclick="window.open('/api/stats/export/csv','_blank')">📄 CSV</button>
+    <a class="nav-action" href="/admin.html">⚙️ 返回管理</a>
   </div>
 </div>
 
@@ -223,7 +76,7 @@
       <div class="chart-header">
         <span class="chart-title">今日关键指标</span>
       </div>
-      <div style="padding: 8px 0;" id="today-metrics">
+      <div class="today-metrics" id="today-metrics">
         <div class="loading"><div class="loading-spinner"></div></div>
       </div>
     </div>
@@ -242,6 +95,57 @@
         <tr><td colspan="4" class="empty-state"><div class="loading-spinner"></div>加载中...</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- 知识库命中率 + 客服工作量排行 -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <span class="chart-title">📚 知识库命中率</span>
+          <span class="chart-subtitle">（近30天，AI回复中由知识库直接回答的比例）</span>
+        </div>
+        <div id="kb-hitrate-summary" style="font-size:20px;font-weight:700;color:var(--primary);"></div>
+      </div>
+      <div class="chart-body" style="height:200px;"><canvas id="kbHitRateChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <span class="chart-title">👤 客服工作量排行</span>
+          <span class="chart-subtitle">（近7天，人工客服处理会话数）</span>
+        </div>
+      </div>
+      <div class="chart-body" style="height:200px;" id="agent-workload-body">
+        <div class="loading" style="margin-top:60px;"><div class="loading-spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 排队等待时间 + 未匹配查询趋势 -->
+  <div class="charts-grid">
+    <div class="chart-card" id="queue-card">
+      <div class="chart-header">
+        <div>
+          <span class="chart-title">⏳ 排队等待时间</span>
+          <span class="chart-subtitle">（近7天，人工客服排队）</span>
+        </div>
+        <div style="display:flex;gap:16px;" id="queue-summary">
+          <div class="loading"><div class="loading-spinner"></div></div>
+        </div>
+      </div>
+      <div class="chart-body" style="height:180px;"><canvas id="queueTrendChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <span class="chart-title">📋 未匹配查询趋势</span>
+          <span class="chart-subtitle">（近30天，AI未能通过知识库回答的问题）</span>
+        </div>
+        <div id="unanswered-summary" style="font-size:20px;font-weight:700;color:#e53e3e;"></div>
+      </div>
+      <div class="chart-body" style="height:180px;"><canvas id="unansweredTrendChart"></canvas></div>
+    </div>
   </div>
 
   <!-- 会话列表 -->
@@ -740,6 +644,241 @@ function renderPagination(pg, containerId, loadFn) {
   el.innerHTML = html;
 }
 
+// ========== 知识库命中率 ==========
+async function loadKnowledgeHitRate() {
+  const canvas = document.getElementById('kbHitRateChart');
+  const summaryEl = document.getElementById('kb-hitrate-summary');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  try {
+    const d = await apiFetch(API + '/knowledge-hit-rate?days=30');
+    if (!d.success || !d.data) return;
+
+    // 摘要数值
+    const s = d.summary;
+    summaryEl.textContent = s.overallHitRate + '%';
+    summaryEl.title = `总计 ${s.total} 次AI回复，知识库命中 ${s.knowledge} 次`;
+
+    // 销毁旧图表
+    if (window._kbHitChart) { window._kbHitChart.destroy(); }
+
+    // 只显示有数据的日期
+    const valid = d.data.filter(r => r.total > 0);
+    window._kbHitChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: valid.map(r => r.date.slice(5)),
+        datasets: [
+          {
+            label: '知识库命中率(%)',
+            data: valid.map(r => r.hitRate),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16,185,129,0.1)',
+            fill: true,
+            tension: 0.3,
+            spanGaps: true,
+            pointRadius: 3,
+          },
+          {
+            label: 'AI生成(%)',
+            data: valid.map(r => r.aiRate),
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59,130,246,0.05)',
+            borderDash: [4, 4],
+            fill: false,
+            tension: 0.3,
+            spanGaps: true,
+            pointRadius: 2,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+        },
+        scales: {
+          y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 10 } } },
+          x: { ticks: { font: { size: 9 }, maxTicksLimit: 15 } },
+        }
+      }
+    });
+  } catch (e) {
+    console.error('知识库命中率加载失败:', e);
+  }
+}
+
+// ========== 客服工作量排行 ==========
+async function loadAgentWorkload() {
+  const body = document.getElementById('agent-workload-body');
+  if (!body) return;
+
+  try {
+    const d = await apiFetch(API + '/agent-workload?days=7');
+    if (!d.success) { body.innerHTML = '<div class="empty-state">暂无数据</div>'; return; }
+
+    if (d.data.length === 0) {
+      body.innerHTML = '<div class="empty-state" style="margin-top:50px;">暂无人工会话数据</div>';
+      return;
+    }
+
+    let html = '<div style="padding:8px 0;">';
+    const maxConv = Math.max(...d.data.map(a => a.conversations));
+    for (const agent of d.data) {
+      const pct = maxConv > 0 ? (agent.conversations / maxConv * 100) : 0;
+      const timeStr = agent.avgResponseMinutes !== null
+        ? agent.avgResponseMinutes + '分钟'
+        : '—';
+      html += `
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+            <span>${agent.agentName}</span>
+            <span style="color:#666;">${agent.conversations} 单 · 平均 ${timeStr}</span>
+          </div>
+          <div style="height:20px;background:#f0f2f5;border-radius:10px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#3b82f6,#6366f1);border-radius:10px;transition:width 0.5s;"></div>
+          </div>
+        </div>`;
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">加载失败</div>';
+    console.error('客服工作量加载失败:', e);
+  }
+}
+
+// ========== 排队等待时间 ==========
+async function loadQueueStats() {
+  try {
+    const d = await apiFetch(API + '/queue-stats?days=7');
+    if (!d.success) return;
+
+    // 摘要信息
+    const s = d.data;
+    const summaryEl = document.getElementById('queue-summary');
+    if (summaryEl) {
+      const avgStr = s.avgWaitMinutes !== null ? s.avgWaitMinutes + '分钟' : '—';
+      const maxStr = s.maxWaitMinutes !== null ? s.maxWaitMinutes + '分钟' : '—';
+      summaryEl.innerHTML = `
+        <div style="text-align:center;"><div style="font-size:22px;font-weight:700;color:${s.currentQueueLength > 0 ? '#e53e3e' : '#10b981'}">${s.currentQueueLength}</div><div style="font-size:11px;color:#666;">排队中</div></div>
+        <div style="text-align:center;"><div style="font-size:14px;font-weight:600;">${avgStr}</div><div style="font-size:11px;color:#666;">平均等待</div></div>
+        <div style="text-align:center;"><div style="font-size:14px;font-weight:600;">${maxStr}</div><div style="font-size:11px;color:#666;">最长等待</div></div>
+      `;
+    }
+
+    // 趋势图
+    const canvas = document.getElementById('queueTrendChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (window._queueChart) { window._queueChart.destroy(); }
+
+    const trend = s.dailyTrend || [];
+    window._queueChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: trend.map(r => r.date.slice(5)),
+        datasets: [
+          {
+            label: '平均等待(分钟)',
+            data: trend.map(r => r.avgWait),
+            backgroundColor: 'rgba(245,158,11,0.5)',
+            borderColor: '#f59e0b',
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+          {
+            label: '接待数',
+            data: trend.map(r => r.conversations),
+            backgroundColor: 'rgba(59,130,246,0.2)',
+            borderColor: '#3b82f6',
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+          x: { ticks: { font: { size: 9 }, maxTicksLimit: 10 } },
+        }
+      }
+    });
+  } catch (e) {
+    console.error('排队统计加载失败:', e);
+  }
+}
+
+// ========== 未匹配查询趋势 ==========
+async function loadUnansweredTrend() {
+  try {
+    const d = await apiFetch(API + '/unanswered-trend?days=30');
+    if (!d.success) return;
+
+    const s = d.data;
+    // 摘要
+    const summaryEl = document.getElementById('unanswered-summary');
+    if (summaryEl) {
+      summaryEl.textContent = s.currentPending + '条待补充';
+      summaryEl.title = `已补充: ${s.totalAdded} | 已忽略: ${s.totalDismissed} | 处理率: ${s.resolutionRate}%`;
+    }
+
+    // 趋势图
+    const canvas = document.getElementById('unansweredTrendChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (window._unansweredChart) { window._unansweredChart.destroy(); }
+
+    const trend = s.dailyTrend || [];
+    window._unansweredChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: trend.map(r => r.date.slice(5)),
+        datasets: [
+          {
+            label: '新增未匹配',
+            data: trend.map(r => r.newCount),
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239,68,68,0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+          },
+          {
+            label: '已处理',
+            data: trend.map(r => r.solved || 0),
+            borderColor: '#10b981',
+            borderDash: [4, 4],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: { size: 10 }, stepSize: 1 } },
+          x: { ticks: { font: { size: 9 }, maxTicksLimit: 10 } },
+        }
+      }
+    });
+  } catch (e) {
+    console.error('未匹配查询趋势加载失败:', e);
+  }
+}
+
 // ========== 全部刷新 ==========
 async function refreshAll() {
   document.getElementById('refresh-time').textContent = '刷新中...';
@@ -759,6 +898,10 @@ async function refreshAll() {
       loadSatisfaction(),
       loadTopQuestions(),
       loadConversations(currentPage),
+      loadKnowledgeHitRate(),
+      loadAgentWorkload(),
+      loadQueueStats(),
+      loadUnansweredTrend(),
     ]);
     document.getElementById('refresh-time').textContent = '最后更新：' + new Date().toLocaleTimeString('zh-CN');
   } catch (e) {

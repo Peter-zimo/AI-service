@@ -2,7 +2,7 @@
 # 多阶段构建：先构建依赖，再打包运行
 
 # ========== 阶段1：安装依赖 ==========
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # 先复制package文件，利用Docker缓存层（依赖不变时跳过npm install）
@@ -10,7 +10,7 @@ COPY package.json package-lock.json* ./
 RUN npm install --production && npm cache clean --force
 
 # ========== 阶段2：运行镜像 ==========
-FROM node:20-alpine
+FROM node:22-alpine
 
 # 安装基础工具（调试用）
 RUN apk add --no-cache tzdata curl

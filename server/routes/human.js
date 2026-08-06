@@ -3,8 +3,9 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const humanService = require('../services/human');
 const db = require('../services/database');
+const { getJwtSecret, sign } = require('../middleware/auth');
 
-// 客服登录
+// 客服登录（登录成功后签发 JWT，供后续 human API 鉴权）
 router.post('/login', async (req, res) => {
   try {
     const { agentId, password } = req.body || {};
@@ -13,6 +14,16 @@ router.post('/login', async (req, res) => {
     }
 
     const result = await humanService.login(agentId, password);
+    if (result.success && result.agent) {
+      // 签发客服 JWT（角色 agent，有效 7 天）
+      const secret = getJwtSecret();
+      const accessToken = sign(
+        { sub: `agent:${result.agent.id}`, role: 'agent', agentId: result.agent.id },
+        secret,
+        86400 * 7
+      );
+      result.accessToken = accessToken;
+    }
     res.json(result);
   } catch (error) {
     console.error('客服登录失败:', error);

@@ -95,6 +95,56 @@ router.get('/overview', (req, res) => {
       avgScore = Math.round((rts.reduce((s, r) => s + (r.score || 0), 0) / rts.length) * 10) / 10;
     }
 
+    // ===== 新增指标计算（基于内存数组，一次遍历） =====
+
+    // 昨日基线（环比对比）
+    const yestConvsCount = yestConvs.length;
+    const yestMsgsCount = msgs.filter(m => m.created_at && m.created_at.startsWith(yesterdayStr)).length;
+    const yestRts = rts.filter(r => r.created_at && r.created_at.startsWith(yesterdayStr));
+    const yestAvgScore = yestRts.length > 0
+      ? Math.round((yestRts.reduce((s, r) => s + (r.score || 0), 0) / yestRts.length) * 10) / 10
+      : 0;
+
+    // 会话解决率：closed 会话中 有评价 或 close_reason 属于解决类 的占比
+    const closedConvs = convs.filter(c => c.status === 'closed');
+    const resolvedReasons = new Set(['rated', 'manual', 'agent_ended', 'resolved']);
+    const resolvedConvs = closedConvs.filter(c => {
+      if (c.close_reason && resolvedReasons.has(c.close_reason)) return true;
+      return rts.some(r => r.conversation_id === c.id);
+    });
+    const resolutionRate = closedConvs.length > 0
+      ? Math.round((resolvedConvs.length / closedConvs.length) * 100)
+      : 0;
+
+    // 转人工率：人工处理 / (AI+人工) 已结束会话
+    const transferRate = handledTotal > 0
+      ? Math.round((humanHandled / handledTotal) * 100)
+      : 0;
+
+    // 平均处理时长 AHT：closed 会话 closed_at/updated_at − created_at（分钟）
+    const handleTimes = [];
+    for (const c of closedConvs) {
+      const start = parseDate(c.created_at);
+      const end = parseDate(c.closed_at) || parseDate(c.updated_at);
+      if (start && end && end > start) {
+        const mins = diffMinutes(start, end);
+        if (mins >= 0 && mins < 1440) handleTimes.push(mins); // 限制 24 小时内
+      }
+    }
+    const avgHandleMinutes = handleTimes.length > 0
+      ? Math.round(handleTimes.reduce((a, b) => a + b, 0) / handleTimes.length)
+      : null;
+
+    // 兜底率 fallback：assistant 消息中 source=fallback 占比
+    const aiMsgs = msgs.filter(m => m.role === 'assistant' && m.source);
+    const fallbackMsgs = aiMsgs.filter(m => m.source === 'fallback').length;
+    const fallbackRate = aiMsgs.length > 0
+      ? Math.round((fallbackMsgs / aiMsgs.length) * 100)
+      : 0;
+
+    // 实时在线总数（active + idle 会话）
+    const activeTotal = activeConvs;
+
     // 今日平均响应时长（估算：取第一条用户消息和第一条bot回复的时间差）
     let avgResponseTime = null;
     const todayConvIds = new Set(todayConvs.map(c => c.id));
@@ -136,6 +186,23 @@ router.get('/overview', (req, res) => {
           ratings: todayRatings.length,
           growth: yestConvs.length > 0 ? Math.round(((todayConvs.length - yestConvs.length) / yestConvs.length) * 100) : 0,
           avgResponseMinutes: avgResponseTime,
+        },
+
+        // 昨日基线（环比）
+        yesterday: {
+          conversations: yestConvsCount,
+          messages: yestMsgsCount,
+          ratings: yestRts.length,
+          avgSatisfaction: yestAvgScore,
+        },
+
+        // 增强指标
+        metrics: {
+          resolutionRate,      // 会话解决率 %
+          transferRate,        // 转人工率 %
+          avgHandleMinutes,    // 平均处理时长 AHT 分钟
+          fallbackRate,        // 兜底率 %
+          activeTotal,         // 实时在线会话数
         },
 
         // 本周
@@ -335,6 +402,242 @@ router.get('/conversations', (req, res) => {
   } catch (e) {
     console.error('[统计] conversations 错误:', e.message);
     res.status(500).json({ success: false, error: '获取会话列表失败' });
+  }
+});
+
+// ============ API: 知识库命中率 ============
+// 按日统计 AI 回复中由知识库回答的比例
+router.get('/knowledge-hit-rate', (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 365);
+    const msgs = dbSvc._messages();
+    const result = [];
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+
+      // 当日 AI 相关回复（assistant + 有 source）
+      const dayMsgs = msgs.filter(m =>
+        m.created_at && m.created_at.startsWith(dateStr) &&
+        m.role === 'assistant' && m.source
+      );
+
+      const total = dayMsgs.length;
+      const knowledge = dayMsgs.filter(m => m.source === 'knowledge').length;
+      const ai = dayMsgs.filter(m => m.source === 'ai').length;
+      const fallback = dayMsgs.filter(m => m.source === 'fallback').length;
+
+      result.push({
+        date: dateStr,
+        total,
+        knowledge,
+        ai,
+        fallback,
+        hitRate: total > 0 ? Math.round((knowledge / total) * 100) : 0,
+        aiRate: total > 0 ? Math.round((ai / total) * 100) : 0,
+        fallbackRate: total > 0 ? Math.round((fallback / total) * 100) : 0,
+      });
+    }
+
+    // 汇总
+    const totalAll = result.reduce((s, r) => s + r.total, 0);
+    const totalKb = result.reduce((s, r) => s + r.knowledge, 0);
+
+    res.json({
+      success: true,
+      data: result,
+      summary: {
+        total: totalAll,
+        knowledge: totalKb,
+        overallHitRate: totalAll > 0 ? Math.round((totalKb / totalAll) * 100) : 0,
+        days: result.filter(r => r.total > 0).length,
+      }
+    });
+  } catch (e) {
+    console.error('[统计] knowledge-hit-rate 错误:', e.message);
+    res.status(500).json({ success: false, error: '获取知识库命中率失败' });
+  }
+});
+
+// ============ API: 客服工作量排行 ============
+router.get('/agent-workload', (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days) || 7, 1), 90);
+    const convs = dbSvc._conversations();
+    const msgs = dbSvc._messages();
+
+    // 计算时间范围
+    const rangeStart = new Date();
+    rangeStart.setDate(rangeStart.getDate() - days);
+    const rangeStartStr = rangeStart.toISOString();
+
+    // 人工模式的已关闭会话
+    const humanConvs = convs.filter(c =>
+      (c.mode === 'human') &&
+      c.assigned_agent &&
+      c.created_at >= rangeStartStr
+    );
+
+    // 按客服分组
+    const agentMap = {};
+    for (const conv of humanConvs) {
+      const agentId = conv.assigned_agent;
+      const agentName = conv.agent_name || agentId;
+      if (!agentMap[agentId]) {
+        agentMap[agentId] = {
+          agentId,
+          agentName,
+          conversations: 0,
+          totalMessages: 0,
+          avgResponseMinutes: 0,
+          responseTimes: [],
+          lastActive: null,
+        };
+      }
+      agentMap[agentId].conversations++;
+      if (conv.last_message_at && (!agentMap[agentId].lastActive || conv.last_message_at > agentMap[agentId].lastActive)) {
+        agentMap[agentId].lastActive = conv.last_message_at;
+      }
+
+      // 计算该会话的响应时间
+      const convMsgs = msgs
+        .filter(m => m.conversation_id === conv.id)
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+      let firstUser = null;
+      for (const msg of convMsgs) {
+        if (!firstUser && msg.role === 'user') {
+          firstUser = new Date(msg.created_at);
+        } else if (firstUser && msg.role === 'agent') {
+          const responseTime = Math.round((new Date(msg.created_at) - firstUser) / 60000);
+          if (responseTime >= 0 && responseTime < 1440) { // 不超过24小时
+            agentMap[agentId].responseTimes.push(responseTime);
+          }
+          break;
+        }
+      }
+    }
+
+    const agents = Object.values(agentMap).map(a => ({
+      ...a,
+      avgResponseMinutes: a.responseTimes.length > 0
+        ? Math.round(a.responseTimes.reduce((s, t) => s + t, 0) / a.responseTimes.length)
+        : null,
+      responseTimes: undefined, // 不返回明细
+    }));
+
+    // 按处理数排序
+    agents.sort((a, b) => b.conversations - a.conversations);
+
+    res.json({
+      success: true,
+      data: agents,
+      total: agents.length,
+      period: `${days}天`,
+    });
+  } catch (e) {
+    console.error('[统计] agent-workload 错误:', e.message);
+    res.status(500).json({ success: false, error: '获取客服工作量失败' });
+  }
+});
+
+// ============ API: 排队等待时间统计 ============
+router.get('/queue-stats', (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days) || 7, 1), 90);
+    const convs = dbSvc._conversations();
+    const humanService = require('../services/human');
+    const currentQueueLength = humanService?.queue?.length || 0;
+
+    // 历史排队数据
+    const rangeStart = new Date();
+    rangeStart.setDate(rangeStart.getDate() - days);
+
+    const queueConvs = convs.filter(c =>
+      c.mode === 'human' && c.assigned_agent &&
+      c.created_at >= rangeStart.toISOString()
+    );
+
+    // 计算等待时间（从 created_at 到 updated_at 的分钟差，近似排队时间）
+    const waitTimes = [];
+    for (const conv of queueConvs) {
+      const created = new Date(conv.created_at);
+      const updated = new Date(conv.updated_at);
+      const waitMin = Math.round((updated - created) / 60000);
+      if (waitMin >= 0 && waitMin < 1440) { // < 24小时
+        waitTimes.push(waitMin);
+      }
+    }
+
+    const avgWait = waitTimes.length > 0
+      ? Math.round(waitTimes.reduce((s, t) => s + t, 0) / waitTimes.length)
+      : null;
+    const maxWait = waitTimes.length > 0 ? Math.max(...waitTimes) : null;
+
+    // 日趋势（近 N 天平均等待时间）
+    const dailyTrend = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const dayConvs = queueConvs.filter(c => c.created_at.startsWith(dateStr));
+      const dayWaits = [];
+      for (const conv of dayConvs) {
+        const created = new Date(conv.created_at);
+        const updated = new Date(conv.updated_at);
+        const waitMin = Math.round((updated - created) / 60000);
+        if (waitMin >= 0 && waitMin < 1440) dayWaits.push(waitMin);
+      }
+      dailyTrend.push({
+        date: dateStr,
+        conversations: dayConvs.length,
+        avgWait: dayWaits.length > 0 ? Math.round(dayWaits.reduce((s, t) => s + t, 0) / dayWaits.length) : 0,
+        maxWait: dayWaits.length > 0 ? Math.max(...dayWaits) : 0,
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        currentQueueLength,
+        totalHandled: queueConvs.length,
+        avgWaitMinutes: avgWait,
+        maxWaitMinutes: maxWait,
+        dailyTrend,
+      }
+    });
+  } catch (e) {
+    console.error('[统计] queue-stats 错误:', e.message);
+    res.status(500).json({ success: false, error: '获取排队统计失败' });
+  }
+});
+
+// ============ API: 未匹配查询趋势 ============
+router.get('/unanswered-trend', (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 365);
+    const unansweredService = require('../services/unanswered');
+
+    const stats = unansweredService.stats();
+    const trend = unansweredService.trend(days);
+
+    res.json({
+      success: true,
+      data: {
+        currentPending: stats.pending,
+        totalAdded: stats.added,
+        totalDismissed: stats.dismissed,
+        totalAll: stats.pending + stats.added + stats.dismissed,
+        resolutionRate: (stats.pending + stats.added + stats.dismissed) > 0
+          ? Math.round(((stats.added + stats.dismissed) / (stats.pending + stats.added + stats.dismissed)) * 100)
+          : 0,
+        dailyTrend: trend.data,
+        topPending: stats.topPending,
+      }
+    });
+  } catch (e) {
+    console.error('[统计] unanswered-trend 错误:', e.message);
+    res.status(500).json({ success: false, error: '获取未匹配查询趋势失败' });
   }
 });
 

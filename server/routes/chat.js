@@ -5,10 +5,53 @@ const db = require('../services/database');
 const aiService = require('../services/ai');
 const sensitiveService = require('../services/sensitive');
 const humanService = require('../services/human');
+const knowledgeService = require('../services/knowledge');
+const unansweredService = require('../services/unanswered');
 const XLSX = require('xlsx');
+const metrics = require('../utils/metrics');
 
 // visitorId 格式白名单正则
 const VISITOR_ID_RE = /^v_\d{10,}_[a-z0-9]{4,20}$/;
+
+// ============ SSE 流式会话管理 ============
+const streamSessions = new Map(); // streamId -> { conversationId, tokens, fullContent, ended, callbacks }
+
+function writeToStream(streamId, token) {
+  const session = streamSessions.get(streamId);
+  if (!session) return;
+  session.tokens.push(token);
+  session.callbacks.forEach(cb => cb({ type: 'token', data: token }));
+}
+function endStream(streamId, fullContent, type) {
+  const session = streamSessions.get(streamId);
+  if (!session) return;
+  session.ended = true;
+  session.fullContent = fullContent;
+  session.callbacks.forEach(cb => cb({ type: 'end', data: { fullContent, type } }));
+  // 5 分钟后清理
+  setTimeout(() => streamSessions.delete(streamId), 5 * 60 * 1000);
+}
+function errorStream(streamId, errorMsg) {
+  const session = streamSessions.get(streamId);
+  if (!session) return;
+  session.ended = true;
+  session.callbacks.forEach(cb => cb({ type: 'error', data: errorMsg }));
+  setTimeout(() => streamSessions.delete(streamId), 60000);
+}
+
+// ============ 会话级 LangChain 调用队列 ============
+// 同一会话的 AI 处理串行执行：流式未完成时下一条消息不会抢占，
+// 避免 AI 服务历史里缺失 assistant 分隔导致"回答上一次问题"的错位
+const langchainQueues = new Map();
+function enqueueLangChain(conversationId, task) {
+  const prev = langchainQueues.get(conversationId) || Promise.resolve();
+  const next = prev.then(task, task);
+  langchainQueues.set(conversationId, next);
+  next.finally(() => {
+    if (langchainQueues.get(conversationId) === next) langchainQueues.delete(conversationId);
+  });
+  return next;
+}
 
 function validateVisitorId(visitorId) {
   if (!visitorId || typeof visitorId !== 'string') return false;
@@ -135,38 +178,150 @@ router.post('/message', async (req, res) => {
       }
     }
 
+    // =====================================
     // AI处理（非人工模式或客服不在线）
-    let aiResponse = await aiService.chat(conversationId, trimmedMessage);
+    // → 统一走 LangChain Agent（全量Agent）
+    // =====================================
+    
+    const LANGCHAIN_URL = process.env.LANGCHAIN_SERVICE_URL || 'http://localhost:8000';
 
-    // 敏感词检测 - AI回复
-    const aiSensitiveCheck = sensitiveService.detect(aiResponse.answer);
-    if (aiSensitiveCheck.hasSensitive) {
-      // 记录日志
-      sensitiveService.logDetection(conversationId, 'ai', aiResponse.answer, aiSensitiveCheck, visitorId);
-      console.log(`[敏感词] AI回复包含敏感词，已替换: ${aiSensitiveCheck.words.join(', ')}`);
-      // 替换为安全回复（使用新的兜底消息）
-      aiResponse = {
-        type: 'fallback',
-        answer: '抱歉，根据我的知识库，暂时没有找到与您问题相关的信息。\n\n您可以尝试：\n1. 换一种方式描述您的问题\n2. 输入"转人工"联系真人客服获得帮助\n\n感谢您的理解！',
-        confidence: 0.3
-      };
-    }
+    // 创建流式会话
+    const streamId = uuidv4();
+    streamSessions.set(streamId, {
+      conversationId,
+      tokens: [],
+      fullContent: '',
+      ended: false,
+      callbacks: new Set()
+    });
+    console.log(`[LangChain Agent] 创建流式会话: ${streamId}`);
 
-    // 保存AI回复
-    db.messages.add(uuidv4(), conversationId, 'assistant', aiResponse.answer, aiResponse.confidence || null);
+    // 后台异步执行 LangChain Agent 调用（按会话串行排队，保证历史顺序）
+    enqueueLangChain(conversationId, async () => {
+      try {
+        const response = await fetch(`${LANGCHAIN_URL}/api/chat/stream`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversation_id: conversationId,
+            message: trimmedMessage,
+            use_agent: true,  // Agent 自主决策：知识库→AI→转人工→兜底
+          }),
+        });
 
-    if (['knowledge', 'ai', 'filtered'].includes(aiResponse.type)) {
-      db.stats.incrementAiHandled();
-    }
+        if (!response.ok) {
+          throw new Error(`LangChain 返回 ${response.status}`);
+        }
 
-    res.json({
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+        let buffer = '';
+        let currentEvent = '';
+        let detectedSource = 'ai';  // 从 SSE 事件中捕获真实来源（knowledge/ai/fallback）
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n');
+          buffer = parts.pop() || '';
+
+          for (const line of parts) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('event: ')) {
+              currentEvent = trimmed.slice(7);
+            } else if (trimmed.startsWith('data: ')) {
+              const data = trimmed.slice(6);
+              if (currentEvent === 'token') {
+                try {
+                  const token = JSON.parse(data);
+                  if (token) {
+                    fullContent += token;
+                    writeToStream(streamId, token);
+                  }
+                } catch (_) {}
+              } else if (currentEvent === 'knowledge') {
+                detectedSource = 'knowledge';
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = typeof parsed === 'string' ? parsed : (parsed.fullContent || parsed.content || '');
+                  if (content && !fullContent) fullContent = content;
+                } catch (_) {}
+              } else if (currentEvent === 'end') {
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.type) detectedSource = parsed.type;
+                  const content = typeof parsed === 'string' ? parsed : (parsed.fullContent || parsed.content || '');
+                  if (content && !fullContent) fullContent = content;
+                } catch (_) {}
+              } else if (currentEvent === 'error') {
+                console.error(`[LangChain Agent] 流式错误: ${data}`);
+              }
+              currentEvent = '';
+            }
+          }
+        }
+
+        // 流结束 → 用 LangChain LLM 检测敏感词
+        if (fullContent) {
+          let finalContent = fullContent;
+          try {
+            const sensRes = await fetch(`${LANGCHAIN_URL}/api/sensitive/check`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: fullContent }),
+            });
+            const sensData = await sensRes.json();
+            if (sensData.success && sensData.data?.has_sensitive) {
+              console.log(`[LangChain Agent] 语义检测到敏感内容: ${sensData.data.reason}`);
+              finalContent = '抱歉，根据我的知识库，暂时没有找到与您问题相关的信息。\n\n您可以尝试：\n1. 换一种方式描述您的问题\n2. 输入"转人工"联系真人客服获得帮助\n\n感谢您的理解！';
+            }
+          } catch (e) {
+            console.error(`[LangChain Agent] 敏感检测失败: ${e.message}`);
+          }
+
+          const finalSource = (finalContent !== fullContent) ? 'fallback' : detectedSource;
+          db.messages.add(uuidv4(), conversationId, 'assistant', finalContent, null, finalSource);
+          db.stats.incrementAiHandled();
+          endStream(streamId, finalContent, finalSource);
+          metrics.inc('chat_messages_total', [finalSource]);
+          // 运营闭环：fallback（AI 无法回答）记录到未答收集
+          if (finalSource === 'fallback') {
+            try { unansweredService.recordQuery(trimmedMessage); } catch(e) {}
+          }
+          console.log(`[LangChain Agent] 流式完成: ${streamId}`);
+        } else {
+          const fallback = {
+            answer: '抱歉，根据我的知识库，暂时没有找到与您问题相关的信息。\n\n您可以尝试：\n1. 换一种方式描述您的问题\n2. 输入"转人工"联系真人客服获得帮助\n\n感谢您的理解！',
+            type: 'fallback',
+          };
+          db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
+          db.stats.incrementAiHandled();
+          endStream(streamId, fallback.answer, fallback.type);
+          // 运营闭环：AI 完全无法回答，记录未答
+          try { unansweredService.recordQuery(trimmedMessage); } catch(e) {}
+        }
+      } catch (err) {
+        console.error(`[LangChain Agent] 请求失败: ${err.message}`);
+        metrics.inc('ai_errors_total', ['langchain_failure']);
+        const fallback = {
+          answer: '抱歉，AI 服务暂时不可用，请稍后重试。',
+          type: 'fallback',
+        };
+        db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
+        db.stats.incrementAiHandled();
+        endStream(streamId, fallback.answer, fallback.type);
+        // 运营闭环：AI 服务异常也记录
+        try { unansweredService.recordQuery(trimmedMessage); } catch(e) {}
+      }
+    });
+
+    return res.json({
       success: true,
-      response: {
-        message: aiResponse.answer,
-        type: aiResponse.type,
-        confidence: aiResponse.confidence,
-        matchQuestion: aiResponse.matchQuestion || null
-      },
+      type: 'streaming',
+      streamId,
       conversation: {
         status: updatedConversation.status,
         mode: updatedConversation.mode,
@@ -497,6 +652,57 @@ router.get('/export/:format', (req, res) => {
     console.error('导出对话失败:', error);
     res.status(500).json({ success: false, error: '导出失败' });
   }
+});
+
+
+// ── SSE 流式端点 ───────────────────────────────────────────────
+// 前端收到 { type: 'streaming', streamId } 后，连接此端点逐 token 接收 AI 回答
+router.get('/stream/:streamId', (req, res) => {
+  const { streamId } = req.params;
+  const session = streamSessions.get(streamId);
+
+  if (!session) {
+    return res.status(404).json({ success: false, error: '流式会话不存在或已过期' });
+  }
+
+  // 设置 SSE 头
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'  // 禁止 nginx 缓冲
+  });
+
+  // 先发送所有已缓冲的 tokens
+  for (const token of session.tokens) {
+    res.write(`event: token\ndata: ${JSON.stringify(token)}\n\n`);
+  }
+
+  // 如果流已结束，直接发送 end 事件
+  if (session.ended) {
+    res.write(`event: end\ndata: ${JSON.stringify({ fullContent: session.fullContent, type: session.type || 'ai' })}\n\n`);
+    return res.end();
+  }
+
+  // 注册回调接收后续 tokens
+  const callback = (event) => {
+    if (event.type === 'token') {
+      res.write(`event: token\ndata: ${JSON.stringify(event.data)}\n\n`);
+    } else if (event.type === 'end') {
+      res.write(`event: end\ndata: ${JSON.stringify(event.data)}\n\n`);
+      res.end();
+    } else if (event.type === 'error') {
+      res.write(`event: error\ndata: ${JSON.stringify(event.data)}\n\n`);
+      res.end();
+    }
+  };
+
+  session.callbacks.add(callback);
+
+  // 客户端断开时清理
+  req.on('close', () => {
+    session.callbacks.delete(callback);
+  });
 });
 
 module.exports = router;

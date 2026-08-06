@@ -1,110 +1,187 @@
 /**
- * Basic Auth 中间件
- * 支持 HTTP Basic Authentication + bcrypt 密码哈希
+ * JWT 认证中间件（企业级）
+ *
+ * 认证方式：Bearer Token（JWT）
+ * 角色分权：admin / agent / readonly
+ * 无额外依赖——纯 crypto 实现
  */
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcrypt');
 
 const AUTH_FILE = path.join(__dirname, '../config/auth.json');
 
-/**
- * 读取 auth.json
- */
-function loadAuthConfig() {
-  return JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8'));
+// JWT 密钥（首次启动自动生成，持久化到 auth.json）
+function getJwtSecret() {
+  const config = loadAuthConfig();
+  if (!config.jwtSecret) {
+    config.jwtSecret = crypto.randomBytes(32).toString('hex');
+    saveAuthConfig(config);
+    console.log('[Auth] 已生成 JWT 密钥');
+  }
+  return config.jwtSecret;
 }
 
-/**
- * 保存 auth.json
- */
+function loadAuthConfig() {
+  try { return JSON.parse(fs.readFileSync(AUTH_FILE, 'utf-8')); }
+  catch (_) { return { users: [], jwtSecret: '' }; }
+}
+
 function saveAuthConfig(config) {
   fs.writeFileSync(AUTH_FILE, JSON.stringify(config, null, 2), 'utf-8');
 }
 
-/**
- * Base64 解码
- */
-function decodeBase64(str) {
-  return Buffer.from(str, 'base64').toString('utf8');
+// ============ JWT 编解码（纯 crypto，零依赖）============
+
+function base64url(str) {
+  return Buffer.from(str).toString('base64url');
 }
 
-/**
- * Basic Auth 中间件（异步版，支持 bcrypt）
- */
-async function basicAuth(req, res, next) {
-  // 跳过健康检查
-  if (req.path === '/health') {
-    return next();
+function base64urlDecode(str) {
+  return Buffer.from(str, 'base64').toString('utf-8');
+}
+
+function sign(payload, secret, expiresInSec = 3600) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const body = { ...payload, iat: now, exp: now + expiresInSec };
+
+  const encoded = base64url(JSON.stringify(header)) + '.' + base64url(JSON.stringify(body));
+  const signature = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
+  return encoded + '.' + signature;
+}
+
+function verify(token, secret) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const encoded = parts[0] + '.' + parts[1];
+    const expectedSig = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
+
+    if (!crypto.timingSafeEqual(Buffer.from(parts[2]), Buffer.from(expectedSig))) {
+      return null;
+    }
+
+    const payload = JSON.parse(base64urlDecode(parts[1]));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return null; // 过期
+    }
+    return payload;
+  } catch (_) {
+    return null;
   }
+}
 
-  const authHeader = req.headers.authorization;
+// ============ JWT 中间件 ============
 
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="AI Service"');
-    return res.status(401).json({
-      success: false,
-      message: '需要登录认证'
-    });
+function jwtAuth(requiredRoles = []) {
+  return async (req, res, next) => {
+    if (req.path === '/health' || req.path === '/metrics') return next();
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: '缺少认证令牌' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const secret = getJwtSecret();
+    const payload = verify(token, secret);
+
+    if (!payload) {
+      return res.status(401).json({ success: false, message: '令牌无效或已过期' });
+    }
+
+    // 角色校验
+    if (requiredRoles.length > 0 && !requiredRoles.includes(payload.role)) {
+      return res.status(403).json({ success: false, message: '权限不足' });
+    }
+
+    req.auth = { username: payload.sub, role: payload.role };
+    next();
+  };
+}
+
+// 别名：兼容旧代码中的 basicAuth 引用（admin 路由）
+function basicAuth(req, res, next) {
+  return jwtAuth(['admin', 'agent'])(req, res, next);
+}
+
+// ============ 登录接口 ============
+
+async function login(req, res) {
+  const { username, password } = req.body || {};
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
   }
 
   try {
-    const base64Credentials = authHeader.split(' ')[1];
-    const credentials = decodeBase64(base64Credentials);
-    const colonIndex = credentials.indexOf(':');
-    const username = credentials.substring(0, colonIndex);
-    const password = credentials.substring(colonIndex + 1);
-
-    const authConfig = loadAuthConfig();
-    const user = authConfig.users.find(u => u.username === username);
+    const config = loadAuthConfig();
+    const user = config.users.find(u => u.username === username);
 
     if (!user) {
-      res.setHeader('WWW-Authenticate', 'Basic realm="AI Service"');
       return res.status(401).json({ success: false, message: '用户名或密码错误' });
     }
 
-    // 兼容：如果密码不是哈希（旧数据迁移），直接比对并自动升级
-    let passwordMatch = false;
+    let match = false;
     if (user.password.startsWith('$2b$') || user.password.startsWith('$2a$')) {
-      passwordMatch = await bcrypt.compare(password, user.password);
+      match = await bcrypt.compare(password, user.password);
     } else {
-      passwordMatch = (user.password === password);
-      // 验证通过后自动升级为 bcrypt 哈希
-      if (passwordMatch) {
+      match = (user.password === password);
+      if (match) {
         user.password = await bcrypt.hash(password, 10);
-        saveAuthConfig(authConfig);
-        console.log(`[Auth] 用户 ${username} 密码已自动升级为哈希存储`);
+        saveAuthConfig(config);
       }
     }
 
-    if (!passwordMatch) {
-      res.setHeader('WWW-Authenticate', 'Basic realm="AI Service"');
+    if (!match) {
       return res.status(401).json({ success: false, message: '用户名或密码错误' });
     }
 
-    req.auth = { username: user.username, role: user.role };
-    next();
+    const secret = getJwtSecret();
+    const accessToken = sign({ sub: username, role: user.role || 'agent' }, secret, 3600);
+    const refreshToken = sign({ sub: username, type: 'refresh' }, secret, 86400 * 7);
+
+    console.log(`[Auth] 用户 ${username} 登录成功, role: ${user.role || 'agent'}`);
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        refreshToken,
+        expiresIn: 3600,
+        user: { username, role: user.role || 'agent' },
+      }
+    });
   } catch (e) {
-    console.error('[Auth] 认证处理错误:', e);
-    res.status(401).json({ success: false, message: '认证失败' });
+    console.error('[Auth] 登录失败:', e);
+    res.status(500).json({ success: false, message: '服务器错误' });
   }
 }
 
-/**
- * 生成 Basic Auth Header（仅内部使用）
- */
-function generateAuthHeader(username, password) {
-  return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
+// ============ Token 刷新 ============
+
+function refreshToken(req, res) {
+  const { refreshToken: rt } = req.body || {};
+  if (!rt) return res.status(400).json({ success: false, message: '缺少 refreshToken' });
+
+  const secret = getJwtSecret();
+  const payload = verify(rt, secret);
+
+  if (!payload || payload.type !== 'refresh') {
+    return res.status(401).json({ success: false, message: 'refreshToken 无效' });
+  }
+
+  const accessToken = sign({ sub: payload.sub, role: payload.role || 'agent' }, secret, 3600);
+  res.json({ success: true, data: { accessToken, expiresIn: 3600 } });
 }
 
-/**
- * 修改管理后台密码（需要旧密码验证）
- * POST /api/auth/change-password
- * Body: { username, oldPassword, newPassword }
- */
+// ============ 修改密码（保留）============
+
 async function changePassword(req, res) {
-  const { username, oldPassword, newPassword } = req.body;
+  const { username, oldPassword, newPassword } = req.body || {};
 
   if (!username || !oldPassword || !newPassword) {
     return res.status(400).json({ success: false, message: '参数不完整' });
@@ -114,37 +191,26 @@ async function changePassword(req, res) {
   }
 
   try {
-    const authConfig = loadAuthConfig();
-    const user = authConfig.users.find(u => u.username === username);
-    if (!user) {
-      return res.status(404).json({ success: false, message: '用户不存在' });
-    }
+    const config = loadAuthConfig();
+    const user = config.users.find(u => u.username === username);
+    if (!user) return res.status(404).json({ success: false, message: '用户不存在' });
 
-    // 验证旧密码
     let oldMatch = false;
     if (user.password.startsWith('$2b$') || user.password.startsWith('$2a$')) {
       oldMatch = await bcrypt.compare(oldPassword, user.password);
     } else {
       oldMatch = (user.password === oldPassword);
     }
-    if (!oldMatch) {
-      return res.status(401).json({ success: false, message: '旧密码错误' });
-    }
+    if (!oldMatch) return res.status(401).json({ success: false, message: '旧密码错误' });
 
-    // 哈希新密码并保存
     user.password = await bcrypt.hash(newPassword, 10);
-    saveAuthConfig(authConfig);
+    saveAuthConfig(config);
 
-    console.log(`[Auth] 用户 ${username} 修改了密码`);
-    return res.json({ success: true, message: '密码修改成功' });
+    res.json({ success: true, message: '密码修改成功' });
   } catch (e) {
     console.error('[Auth] 修改密码失败:', e);
-    return res.status(500).json({ success: false, message: '服务器错误' });
+    res.status(500).json({ success: false, message: '服务器错误' });
   }
 }
 
-module.exports = {
-  basicAuth,
-  generateAuthHeader,
-  changePassword
-};
+module.exports = { jwtAuth, basicAuth, login, refreshToken, changePassword, getJwtSecret, sign, verify };
