@@ -60,7 +60,7 @@ function validateVisitorId(visitorId) {
 }
 
 // 创建新对话
-router.post('/create', (req, res) => {
+router.post('/create', async (req, res) => {
   try {
     const { visitorId, visitorName } = req.body || {};
     if (!visitorId) {
@@ -73,9 +73,9 @@ router.post('/create', (req, res) => {
     const conversationId = uuidv4();
     console.log('[创建会话] db.conversations 类型:', typeof db.conversations);
     console.log('[创建会话] db.conversations.create:', typeof db.conversations?.create);
-    const result = db.conversations.create(conversationId, visitorId, visitorName || '访客');
+    const result = await db.conversations.create(conversationId, visitorId, visitorName || '访客');
     console.log('[创建会话] 结果:', result);
-    db.stats.incrementConversations();
+    await db.stats.incrementConversations();
     res.json({ success: true, conversationId });
   } catch (error) {
     console.error('创建对话失败:', error);
@@ -101,7 +101,7 @@ router.post('/message', async (req, res) => {
     }
 
     // 检查会话是否存在且未关闭
-    const conversation = db.conversations.getById(conversationId);
+    const conversation = await db.conversations.getById(conversationId);
     if (!conversation) {
       return res.status(400).json({ success: false, error: '会话不存在' });
     }
@@ -139,14 +139,14 @@ router.post('/message', async (req, res) => {
     }
 
     // 更新会话最后消息时间
-    db.conversations.updateLastMessage(conversationId);
+    await db.conversations.updateLastMessage(conversationId);
 
     // 保存用户消息
-    db.messages.add(uuidv4(), conversationId, 'user', trimmedMessage);
-    db.stats.incrementMessages();
+    await db.messages.add(uuidv4(), conversationId, 'user', trimmedMessage);
+    await db.stats.incrementMessages();
 
     // 检查会话模式
-    const updatedConversation = db.conversations.getById(conversationId);
+    const updatedConversation = await db.conversations.getById(conversationId);
     
     // 如果是人工模式，转发给客服
     if (updatedConversation.mode === db.conversations.MODE.HUMAN) {
@@ -283,8 +283,8 @@ router.post('/message', async (req, res) => {
           }
 
           const finalSource = (finalContent !== fullContent) ? 'fallback' : detectedSource;
-          db.messages.add(uuidv4(), conversationId, 'assistant', finalContent, null, finalSource);
-          db.stats.incrementAiHandled();
+          await db.messages.add(uuidv4(), conversationId, 'assistant', finalContent, null, finalSource);
+          await db.stats.incrementAiHandled();
           endStream(streamId, finalContent, finalSource);
           metrics.inc('chat_messages_total', [finalSource]);
           // 运营闭环：fallback（AI 无法回答）记录到未答收集
@@ -297,8 +297,8 @@ router.post('/message', async (req, res) => {
             answer: '抱歉，根据我的知识库，暂时没有找到与您问题相关的信息。\n\n您可以尝试：\n1. 换一种方式描述您的问题\n2. 输入"转人工"联系真人客服获得帮助\n\n感谢您的理解！',
             type: 'fallback',
           };
-          db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
-          db.stats.incrementAiHandled();
+          await db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
+          await db.stats.incrementAiHandled();
           endStream(streamId, fallback.answer, fallback.type);
           // 运营闭环：AI 完全无法回答，记录未答
           try { unansweredService.recordQuery(trimmedMessage); } catch(e) {}
@@ -310,8 +310,8 @@ router.post('/message', async (req, res) => {
           answer: '抱歉，AI 服务暂时不可用，请稍后重试。',
           type: 'fallback',
         };
-        db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
-        db.stats.incrementAiHandled();
+        await db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
+        await db.stats.incrementAiHandled();
         endStream(streamId, fallback.answer, fallback.type);
         // 运营闭环：AI 服务异常也记录
         try { unansweredService.recordQuery(trimmedMessage); } catch(e) {}
@@ -335,7 +335,7 @@ router.post('/message', async (req, res) => {
 });
 
 // 获取对话历史
-router.get('/history/:conversationId', (req, res) => {
+router.get('/history/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { visitorId } = req.query; // 访客端必须传递 visitorId
@@ -345,7 +345,7 @@ router.get('/history/:conversationId', (req, res) => {
       if (!validateVisitorId(visitorId)) {
         return res.status(400).json({ success: false, error: 'visitorId格式无效' });
       }
-      const conversation = db.conversations.getById(conversationId);
+      const conversation = await db.conversations.getById(conversationId);
       if (!conversation) {
         return res.status(404).json({ success: false, error: '会话不存在' });
       }
@@ -354,7 +354,7 @@ router.get('/history/:conversationId', (req, res) => {
       }
     }
     
-    const messages = db.messages.getByConversation(conversationId);
+    const messages = await db.messages.getByConversation(conversationId);
     res.json({ success: true, messages });
   } catch (error) {
     console.error('获取历史失败:', error);
@@ -368,7 +368,7 @@ router.get('/history/:conversationId', (req, res) => {
 
 
 // 评价对话
-router.post('/rate', (req, res) => {
+router.post('/rate', async (req, res) => {
   try {
     const { conversationId, score, comment, visitorId } = req.body || {};
     if (!conversationId) {
@@ -380,7 +380,7 @@ router.post('/rate', (req, res) => {
       if (!validateVisitorId(visitorId)) {
         return res.status(400).json({ success: false, error: 'visitorId格式无效' });
       }
-      const conversation = db.conversations.getById(conversationId);
+      const conversation = await db.conversations.getById(conversationId);
       if (!conversation) {
         return res.status(404).json({ success: false, error: '会话不存在' });
       }
@@ -390,8 +390,8 @@ router.post('/rate', (req, res) => {
     }
     
     const validScore = Math.min(5, Math.max(1, parseInt(score) || 3));
-    db.ratings.add(uuidv4(), conversationId, validScore, comment || null);
-    db.conversations.close(conversationId, 'rated');
+    await db.ratings.add(uuidv4(), conversationId, validScore, comment || null);
+    await db.conversations.close(conversationId, 'rated');
     aiService.clearHistory(conversationId);
     res.json({ success: true });
   } catch (error) {
@@ -401,14 +401,14 @@ router.post('/rate', (req, res) => {
 });
 
 // 手动关闭会话
-router.post('/close', (req, res) => {
+router.post('/close', async (req, res) => {
   try {
     const { conversationId, visitorId } = req.body || {};
     if (!conversationId) {
       return res.status(400).json({ success: false, error: '缺少conversationId' });
     }
     
-    const conversation = db.conversations.getById(conversationId);
+    const conversation = await db.conversations.getById(conversationId);
     if (!conversation) {
       return res.status(404).json({ success: false, error: '会话不存在' });
     }
@@ -428,7 +428,7 @@ router.post('/close', (req, res) => {
       return res.json({ success: true, message: '会话已处于关闭状态' });
     }
     
-    db.conversations.close(conversationId, 'manual');
+    await db.conversations.close(conversationId, 'manual');
     aiService.clearHistory(conversationId);
     
     res.json({ success: true, message: '会话已关闭' });
@@ -439,10 +439,10 @@ router.post('/close', (req, res) => {
 });
 
 // 获取会话状态
-router.get('/status/:conversationId', (req, res) => {
+router.get('/status/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const conversation = db.conversations.getById(conversationId);
+    const conversation = await db.conversations.getById(conversationId);
     
     if (!conversation) {
       return res.status(404).json({ success: false, error: '会话不存在' });
@@ -464,9 +464,9 @@ router.get('/status/:conversationId', (req, res) => {
 });
 
 // 获取会话统计
-router.get('/conversation-stats', (req, res) => {
+router.get('/conversation-stats', async (req, res) => {
   try {
-    const stats = db.conversations.getStats();
+    const stats = await db.conversations.getStats();
     res.json({ success: true, stats });
   } catch (error) {
     console.error('获取会话统计失败:', error);
@@ -475,14 +475,14 @@ router.get('/conversation-stats', (req, res) => {
 });
 
 // 请求转人工
-router.post('/transfer-to-human', (req, res) => {
+router.post('/transfer-to-human', async (req, res) => {
   try {
     const { conversationId, visitorId } = req.body || {};
     if (!conversationId) {
       return res.status(400).json({ success: false, error: '缺少conversationId' });
     }
 
-    const conversation = db.conversations.getById(conversationId);
+    const conversation = await db.conversations.getById(conversationId);
     if (!conversation) {
       return res.status(404).json({ success: false, error: '会话不存在' });
     }
@@ -517,10 +517,10 @@ router.post('/transfer-to-human', (req, res) => {
     if (result.success) {
       if (result.inQueue) {
         // 进入队列
-        db.conversations.setMode(conversationId, db.conversations.MODE.QUEUE);
+        await db.conversations.setMode(conversationId, db.conversations.MODE.QUEUE);
       } else {
         // 直接分配
-        db.conversations.setMode(conversationId, db.conversations.MODE.HUMAN, result.agent);
+        await db.conversations.setMode(conversationId, db.conversations.MODE.HUMAN, result.agent);
       }
     }
 
@@ -532,17 +532,17 @@ router.post('/transfer-to-human', (req, res) => {
 });
 
 // 取消排队
-router.post('/cancel-queue', (req, res) => {
+router.post('/cancel-queue', async (req, res) => {
   try {
     const { conversationId } = req.body || {};
     if (!conversationId) {
       return res.status(400).json({ success: false, error: '缺少conversationId' });
     }
 
-    const conversation = db.conversations.getById(conversationId);
+    const conversation = await db.conversations.getById(conversationId);
     if (conversation && conversation.mode === db.conversations.MODE.QUEUE) {
       humanService.cancelQueue(conversationId);
-      db.conversations.setMode(conversationId, db.conversations.MODE.AI);
+      await db.conversations.setMode(conversationId, db.conversations.MODE.AI);
     }
 
     res.json({ success: true, message: '已取消排队' });
@@ -553,11 +553,11 @@ router.post('/cancel-queue', (req, res) => {
 });
 
 // 获取统计数据
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
-    const todayStats = db.stats.getToday() || { total_conversations: 0, total_messages: 0, ai_handled: 0 };
-    const recentStats = db.stats.getRecent(7);
-    const summary = db.stats.getSummary();
+    const todayStats = await db.stats.getToday() || { total_conversations: 0, total_messages: 0, ai_handled: 0 };
+    const recentStats = await db.stats.getRecent(7);
+    const summary = await db.stats.getSummary();
     res.json({
       success: true,
       stats: { today: todayStats, week: recentStats, summary }
@@ -569,13 +569,13 @@ router.get('/stats', (req, res) => {
 });
 
 // 导出对话记录（支持 XLSX / CSV）【P3-1安全修复：增加分页和大小限制】
-router.get('/export/:format', (req, res) => {
+router.get('/export/:format', async (req, res) => {
   try {
     // 限制导出量，防止内存耗尽
     const MAX_CONVS = 500;      // 最多导出会话数
     const MAX_ROWS = 5000;      // 最多导出消息行数
     
-    const conversations = db.conversations.list(MAX_CONVS);
+    const conversations = await db.conversations.list(MAX_CONVS);
     const allRatings = db._db.prepare('SELECT * FROM ratings').all();
     const now = new Date().toISOString().slice(0, 10);
 
@@ -657,7 +657,7 @@ router.get('/export/:format', (req, res) => {
 
 // ── SSE 流式端点 ───────────────────────────────────────────────
 // 前端收到 { type: 'streaming', streamId } 后，连接此端点逐 token 接收 AI 回答
-router.get('/stream/:streamId', (req, res) => {
+router.get('/stream/:streamId', async (req, res) => {
   const { streamId } = req.params;
   const session = streamSessions.get(streamId);
 

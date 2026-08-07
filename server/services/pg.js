@@ -36,20 +36,34 @@ function convertPlaceholders(sql) {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
+// 首次查询前先确保表结构就绪（幂等：只建一次，解决启动竞态）
+let _schemaPromise = null;
+function ensureSchemaReady() {
+  if (!_schemaPromise) {
+    _schemaPromise = ensureSchema().catch(e => {
+      console.error('[PG] 建表失败:', e.message);
+    });
+  }
+  return _schemaPromise;
+}
+
 // 查询多条
 async function query(sql, params = []) {
+  await ensureSchemaReady();
   const result = await pool.query(convertPlaceholders(sql), params);
   return result.rows;
 }
 
 // 查询单条
 async function queryOne(sql, params = []) {
+  await ensureSchemaReady();
   const result = await pool.query(convertPlaceholders(sql), params);
   return result.rows[0] || null;
 }
 
 // 执行（INSERT/UPDATE/DELETE）
 async function execute(sql, params = []) {
+  await ensureSchemaReady();
   const result = await pool.query(convertPlaceholders(sql), params);
   return { changes: result.rowCount, lastInsertRowid: null };
 }

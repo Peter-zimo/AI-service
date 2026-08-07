@@ -228,12 +228,14 @@ function initKnowledgeTable() {
     )
   `);
 
-  // 2. 给旧表加 embedding 列（幂等）
-  try {
-    db.exec("ALTER TABLE knowledge ADD COLUMN embedding TEXT DEFAULT NULL");
-    console.log('[知识库] 新增 embedding 列');
-  } catch (_) {
-    // 列已存在，忽略
+  // 2. 给旧表加 embedding 列（幂等；PG 模式表结构由 ensureSchema 定义，跳过）
+  if (process.env.DB_TYPE !== 'postgres') {
+    try {
+      db.exec("ALTER TABLE knowledge ADD COLUMN embedding TEXT DEFAULT NULL");
+      console.log('[知识库] 新增 embedding 列');
+    } catch (_) {
+      // 列已存在，忽略
+    }
   }
 
   // 3. FTS5 全文搜索虚拟表（独立表，避免 content sync 的 rowid 映射问题）
@@ -373,16 +375,20 @@ class KnowledgeService {
   constructor() {
     this.knowledgeBase = [];
     this._embeddingsReady = false; // embedding 批量计算状态
-    this.loadKnowledge();
-    // 启动时重建 FTS5 索引（initKnowledgeTable 每次都会 DROP 重建空表）
+    // 异步初始化（SQLite 同步快、PG 异步）：检索/CRUD 前 await this._ready
+    this._ready = this._init();
+  }
+
+  async _init() {
+    await this.loadKnowledge();
     rebuildFTS5();
     console.log(`[知识库] 加载完成，共 ${this.knowledgeBase.length} 条`);
     // 异步计算缺失的 embeddings（不阻塞启动）
     this._batchComputeEmbeddings();
   }
 
-  loadKnowledge() {
-    const rows = db.prepare('SELECT * FROM knowledge ORDER BY id').all();
+  async loadKnowledge() {
+    const rows = await db.prepare('SELECT * FROM knowledge ORDER BY id').all();
     this.knowledgeBase = rows.map(r => ({
       id: r.id,
       question: r.question,
@@ -392,15 +398,15 @@ class KnowledgeService {
     }));
   }
 
-  saveAll() {
-    db.exec('DELETE FROM knowledge');
+  async saveAll() {
+    await db.exec('DELETE FROM knowledge');
     const insert = db.prepare(`
       INSERT INTO knowledge (id, question, answer, keywords, embedding, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     const now = new Date().toISOString();
     for (const item of this.knowledgeBase) {
-      insert.run(item.id, item.question, item.answer,
+      await insert.run(item.id, item.question, item.answer,
         JSON.stringify(item.keywords || []),
         item.embedding ? JSON.stringify(item.embedding) : null,
         now, now);
@@ -429,7 +435,7 @@ class KnowledgeService {
 
   // ============ FTS5 检索 ============
 
-  searchFTS5(query) {
+  async searchFTS5(query) {
     const cleanQuery = query.replace(/[？?，。！!.,!？、；：""''「」【】]/g, ' ').trim();
     if (!cleanQuery) return [];
 
@@ -460,7 +466,7 @@ class KnowledgeService {
         matchParts = orParts.join(' OR ');
       }
 
-      const rows = db.prepare(`
+      const rows = await db.prepare(`
         SELECT k.id, k.question, k.answer, k.keywords, knowledge_fts.rank
         FROM knowledge_fts
         JOIN knowledge k ON k.rowid = knowledge_fts.rowid
@@ -487,6 +493,7 @@ class KnowledgeService {
   // ============ 向量语义检索 ============
 
   async searchSemantic(query) {
+    await this._ready;
     // 如果没有 embedding 数据，降级为本地向量实时检索（保证演示可用）
     const hasEmbeddings = this.knowledgeBase.some(k => k.embedding);
     if (!hasEmbeddings) {
@@ -532,8 +539,9 @@ class KnowledgeService {
   // ============ 混合检索（Hybrid） ============
 
   async searchHybrid(query) {
+    await this._ready;
     // 1. FTS5 检索
-    const ftsResults = this.searchFTS5(query);
+    const ftsResults = await this.searchFTS5(query);
 
     // 2. 语义检索
     const semanticResults = await this.searchSemantic(query);
@@ -616,12 +624,13 @@ class KnowledgeService {
    * 异步，自动降级
    */
   async search(query) {
+    await this._ready;
     try {
       const hybridResults = await this.searchHybrid(query);
       if (hybridResults.length > 0) return hybridResults;
     } catch (e) {
       console.error('[知识库] 混合检索失败，降级到 FTS5:', e.message);
-      const ftsResults = this.searchFTS5(query);
+      const ftsResults = await this.searchFTS5(query);
       if (ftsResults.length > 0) return ftsResults;
     }
     // 最终降级
@@ -635,6 +644,7 @@ class KnowledgeService {
    * - 混合结果: _bestOriginalScore >= 0.1 (语义检索)
    */
   async getBestMatch(query) {
+    await this._ready;
     const results = await this.search(query);
     if (results.length === 0) return null;
 
@@ -653,7 +663,8 @@ class KnowledgeService {
 
   // ============ CRUD ============
 
-  getAll() {
+  async getAll() {
+    await this._ready;
     return this.knowledgeBase.map(item => ({
       id: item.id,
       question: item.question,
@@ -663,7 +674,8 @@ class KnowledgeService {
     }));
   }
 
-  getById(id) {
+  async getById(id) {
+    await this._ready;
     const item = this.knowledgeBase.find(item => item.id === id);
     if (!item) return null;
     return {
@@ -675,7 +687,8 @@ class KnowledgeService {
     };
   }
 
-  addItem(question, answer, keywords = []) {
+  async addItem(question, answer, keywords = []) {
+    await this._ready;
     const item = {
       id: 'k' + Date.now(),
       question,
@@ -684,20 +697,21 @@ class KnowledgeService {
       embedding: null
     };
     this.knowledgeBase.push(item);
-    this.saveAll();
+    await this.saveAll();
     // 异步计算 embedding
     this._computeSingleEmbedding(item);
     return { id: item.id, question: item.question, answer: item.answer, keywords: item.keywords };
   }
 
-  updateItem(id, question, answer, keywords = []) {
+  async updateItem(id, question, answer, keywords = []) {
+    await this._ready;
     const index = this.knowledgeBase.findIndex(k => k.id === id);
     if (index !== -1) {
       this.knowledgeBase[index].question = question;
       this.knowledgeBase[index].answer = answer;
       this.knowledgeBase[index].keywords = keywords.length > 0 ? keywords : this.extractKeywords(question);
       this.knowledgeBase[index].embedding = null; // 标记为待更新
-      this.saveAll();
+      await this.saveAll();
       // 异步计算新 embedding
       this._computeSingleEmbedding(this.knowledgeBase[index]);
       return {
@@ -710,23 +724,26 @@ class KnowledgeService {
     return null;
   }
 
-  deleteItem(id) {
+  async deleteItem(id) {
+    await this._ready;
     const index = this.knowledgeBase.findIndex(k => k.id === id);
     if (index !== -1) {
       const deleted = this.knowledgeBase.splice(index, 1)[0];
-      this.saveAll();
+      await this.saveAll();
       return { id: deleted.id, question: deleted.question, answer: deleted.answer, keywords: deleted.keywords };
     }
     return null;
   }
 
-  clearAll() {
+  async clearAll() {
+    await this._ready;
     this.knowledgeBase = [];
-    this.saveAll();
+    await this.saveAll();
     return { success: true };
   }
 
-  batchAdd(items) {
+  async batchAdd(items) {
+    await this._ready;
     const existingQuestions = new Set(this.knowledgeBase.map(k => k.question.trim()));
     let added = 0, skipped = 0;
     const newItems = [];
@@ -757,14 +774,15 @@ class KnowledgeService {
     }
 
     if (added > 0) {
-      this.saveAll();
+      await this.saveAll();
       // 异步批量计算 embeddings
       this._batchComputeEmbeddingsFor(newItems);
     }
     return { added, skipped };
   }
 
-  resetToDefault() {
+  async resetToDefault() {
+    await this._ready;
     resetToDefault();
     this.loadKnowledge();
     // 异步计算 embeddings
@@ -779,7 +797,7 @@ class KnowledgeService {
     if (vec) {
       item.embedding = vec;
       // 持久化
-      db.prepare('UPDATE knowledge SET embedding = ? WHERE id = ?')
+      await db.prepare('UPDATE knowledge SET embedding = ? WHERE id = ?')
         .run(JSON.stringify(vec), item.id);
     }
   }
@@ -789,7 +807,7 @@ class KnowledgeService {
       const vec = await computeEmbedding(item.question);
       if (vec) {
         item.embedding = vec;
-        db.prepare('UPDATE knowledge SET embedding = ? WHERE id = ?')
+        await db.prepare('UPDATE knowledge SET embedding = ? WHERE id = ?')
           .run(JSON.stringify(vec), item.id);
       }
       // 避免同时发起过多请求，间隔 200ms

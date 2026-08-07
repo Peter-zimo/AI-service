@@ -39,9 +39,9 @@ const upload = multer({
 });
 
 // 获取所有知识库
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const knowledge = knowledgeService.getAll();
+    const knowledge = await knowledgeService.getAll();
     res.json({
       success: true,
       data: knowledge,
@@ -65,7 +65,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const item = knowledgeService.addItem(question, answer, keywords);
+    const item = await knowledgeService.addItem(question, answer, keywords);
 
     res.json({
       success: true,
@@ -90,7 +90,7 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    const item = knowledgeService.updateItem(req.params.id, question, answer, keywords);
+    const item = await knowledgeService.updateItem(req.params.id, question, answer, keywords);
 
     if (!item) {
       return res.status(404).json({ success: false, error: '知识库条目不存在' });
@@ -108,9 +108,9 @@ router.put('/:id', async (req, res) => {
 });
 
 // 删除知识库
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const deleted = knowledgeService.deleteItem(req.params.id);
+    const deleted = await knowledgeService.deleteItem(req.params.id);
 
     if (!deleted) {
       return res.status(404).json({ success: false, error: '知识库条目不存在' });
@@ -127,9 +127,9 @@ router.delete('/:id', (req, res) => {
 });
 
 // 清空知识库
-router.delete('/', (req, res) => {
+router.delete('/', async (req, res) => {
   try {
-    const result = knowledgeService.clearAll();
+    const result = await knowledgeService.clearAll();
     res.json(result);
   } catch (error) {
     console.error('清空知识库失败:', error);
@@ -138,9 +138,9 @@ router.delete('/', (req, res) => {
 });
 
 // 重置为默认数据
-router.post('/reset', (req, res) => {
+router.post('/reset', async (req, res) => {
   try {
-    const result = knowledgeService.resetToDefault();
+    const result = await knowledgeService.resetToDefault();
     res.json({
       success: true,
       message: '已重置为默认数据',
@@ -153,7 +153,7 @@ router.post('/reset', (req, res) => {
 });
 
 // ── 导入：第一步 解析预览（前端拖拽上传触发）──────────────────────────────
-router.post('/import/parse', (req, res) => {
+router.post('/import/parse', async (req, res) => {
   upload.single('file')(req, res, async (err) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
@@ -184,7 +184,7 @@ router.post('/import/parse', (req, res) => {
       // 用完删除临时文件
       try { fs.unlinkSync(req.file.path); } catch (e) { console.error('[导入] 临时文件清理失败:', e.message); }
 
-      const existing = knowledgeService.getAll();
+      const existing = await knowledgeService.getAll();
       const existingQuestions = new Set(existing.map(item => item.question.trim()));
 
       const preview = [];
@@ -225,13 +225,13 @@ router.post('/import/parse', (req, res) => {
 });
 
 // ── 导入：第二步 确认写入 ─────────────────────────────────────────────────
-router.post('/import/confirm', (req, res) => {
+router.post('/import/confirm', async (req, res) => {
   try {
     const { items } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, error: '没有可导入的数据' });
     }
-    const result = knowledgeService.batchAdd(items);
+    const result = await knowledgeService.batchAdd(items);
     res.json({
       success: true,
       imported: result.added,
@@ -245,7 +245,7 @@ router.post('/import/confirm', (req, res) => {
 });
 
 // 批量导入知识库（支持 xlsx / csv / json 三种格式）
-router.post('/batch', (req, res) => {
+router.post('/batch', async (req, res) => {
   // 使用显式调用捕获 multer 错误（文件类型/大小超限）
   upload.single('file')(req, res, async (err) => {
     if (err) {
@@ -326,7 +326,7 @@ router.post('/batch', (req, res) => {
       });
     }
 
-    const result = knowledgeService.batchAdd(items);
+    const result = await knowledgeService.batchAdd(items);
 
     res.json({
       success: true,
@@ -341,9 +341,9 @@ router.post('/batch', (req, res) => {
 });
 
 // 导出知识库（支持 JSON / XLSX / CSV）
-router.get('/export/:format', (req, res) => {
+router.get('/export/:format', async (req, res) => {
   try {
-    const knowledge = knowledgeService.getAll();
+    const knowledge = await knowledgeService.getAll();
     const { format } = req.params;
 
     if (format === 'json') {
@@ -406,9 +406,9 @@ router.get('/search/query', async (req, res) => {
 });
 
 // 获取单个知识库（通配符路由必须放在所有精确路由之后）
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const item = knowledgeService.getById(req.params.id);
+    const item = await knowledgeService.getById(req.params.id);
     if (!item) {
       return res.status(404).json({ success: false, error: '知识库条目不存在' });
     }

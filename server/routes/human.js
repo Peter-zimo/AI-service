@@ -32,7 +32,7 @@ router.post('/login', async (req, res) => {
 });
 
 // 客服上线
-router.post('/online', (req, res) => {
+router.post('/online', async (req, res) => {
   try {
     const { agentId } = req.body || {};
     if (!agentId) {
@@ -48,7 +48,7 @@ router.post('/online', (req, res) => {
 });
 
 // 客服下线
-router.post('/offline', (req, res) => {
+router.post('/offline', async (req, res) => {
   try {
     const { agentId } = req.body || {};
     if (!agentId) {
@@ -64,7 +64,7 @@ router.post('/offline', (req, res) => {
 });
 
 // 获取客服信息
-router.get('/agent/:agentId', (req, res) => {
+router.get('/agent/:agentId', async (req, res) => {
   try {
     const { agentId } = req.params;
     const agent = humanService.agents.get(agentId);
@@ -91,7 +91,7 @@ router.get('/agent/:agentId', (req, res) => {
 });
 
 // 获取所有客服状态（管理用）
-router.get('/agents', (req, res) => {
+router.get('/agents', async (req, res) => {
   try {
     const agents = humanService.getAllAgents();
     res.json({ success: true, agents });
@@ -102,7 +102,7 @@ router.get('/agents', (req, res) => {
 });
 
 // 获取队列信息
-router.get('/queue', (req, res) => {
+router.get('/queue', async (req, res) => {
   try {
     const queueInfo = humanService.getQueueInfo();
     res.json({ success: true, queue: queueInfo });
@@ -113,7 +113,7 @@ router.get('/queue', (req, res) => {
 });
 
 // 客服发送消息给用户
-router.post('/send-message', (req, res) => {
+router.post('/send-message', async (req, res) => {
   try {
     const { agentId, conversationId, message } = req.body || {};
     if (!agentId || !conversationId || !message) {
@@ -129,7 +129,7 @@ router.post('/send-message', (req, res) => {
     }
 
     // 保存消息
-    db.messages.add(uuidv4(), conversationId, 'agent', message);
+    await db.messages.add(uuidv4(), conversationId, 'agent', message);
 
     // 通过WebSocket发送给用户
     const sent = humanService.sendToUser(conversationId, {
@@ -148,7 +148,7 @@ router.post('/send-message', (req, res) => {
 });
 
 // 客服结束会话
-router.post('/end-conversation', (req, res) => {
+router.post('/end-conversation', async (req, res) => {
   try {
     const { agentId, conversationId } = req.body || {};
     if (!agentId || !conversationId) {
@@ -167,7 +167,7 @@ router.post('/end-conversation', (req, res) => {
     const endedId = humanService.endConversation(agentId);
     if (endedId) {
       // 更新会话状态
-      db.conversations.close(endedId, 'agent_ended');
+      await db.conversations.close(endedId, 'agent_ended');
       
       // 通知用户会话已结束
       humanService.sendToUser(conversationId, {
@@ -185,11 +185,11 @@ router.post('/end-conversation', (req, res) => {
 });
 
 // 获取会话历史（客服用）
-router.get('/history/:conversationId', (req, res) => {
+router.get('/history/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const messages = db.messages.getByConversation(conversationId);
-    const conversation = db.conversations.getById(conversationId);
+    const messages = await db.messages.getByConversation(conversationId);
+    const conversation = await db.conversations.getById(conversationId);
     
     res.json({
       success: true,

@@ -118,7 +118,7 @@ const adminLimiter = rateLimit({
 });
 
 // 管理后台 + 客服台页面（页面本身免认证，内部 API 走 JWT）
-app.get(['/admin.html', '/agent.html'], (req, res) => {
+app.get(['/admin.html', '/agent.html'], async (req, res) => {
   const filePath = path.join(__dirname, '../public', req.path);
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -148,7 +148,7 @@ app.use((req, res, next) => {
 });
 
 // 健康检查（增强版——含系统信息）
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
   const os = require('os');
   res.json({
     status: 'ok',
@@ -165,7 +165,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Prometheus 指标端点（内部网络访问，不暴露公网）
-app.get('/api/metrics', (req, res) => {
+app.get('/api/metrics', async (req, res) => {
   res.setHeader('Content-Type', 'text/plain; version=0.0.4');
   res.send(metrics.toPrometheusText());
 });
@@ -177,7 +177,7 @@ app.use('/api/auth', authRoutes);
 if (process.env.NODE_ENV !== 'production') {
   app.get(['/api/debug/dir', '/api/debug/knowledge', '/api/debug/ai-test'], jwtAuth());
 
-  app.get('/api/debug/dir', (req, res) => {
+  app.get('/api/debug/dir', async (req, res) => {
     res.json({ 
       __dirname: __dirname, 
       cwd: process.cwd(),
@@ -223,7 +223,7 @@ if (process.env.NODE_ENV !== 'production') {
   });
 } else {
   // 生产环境：调试接口返回404
-  app.get('/api/debug/{*splat}', (req, res) => {
+  app.get('/api/debug/{*splat}', async (req, res) => {
     res.status(404).json({ success: false, error: '该接口在生产环境已禁用' });
   });
 }
@@ -233,7 +233,7 @@ app.post('/api/chat/create', createLimiter);   // 创建会话限流
 app.post('/api/chat/message', chatLimiter);    // 聊天消息限流
 
 // 对话列表（需要认证）— 必须在 chatRoutes 挂载之前注册，否则会被 app.use 吞掉
-app.get('/api/chat/list', adminLimiter, jwtAuth(['admin', 'agent']), (req, res) => {
+app.get('/api/chat/list', adminLimiter, jwtAuth(['admin', 'agent']), async (req, res) => {
   try {
     const db = require('./services/database');
     const limit = parseInt(req.query.limit) || 100;
@@ -279,7 +279,7 @@ app.get('/api/chat/list', adminLimiter, jwtAuth(['admin', 'agent']), (req, res) 
 
 app.use('/api/chat', chatRoutes);  // 访客聊天，无需认证
 app.use('/api/actions', chatLimiter, actionsRoutes);  // 业务执行（订单/申诉/退款），用户侧操作
-app.get('/api/config/brand', (req, res) => {
+app.get('/api/config/brand', async (req, res) => {
   // 品牌配置公开接口（访客端加载品牌皮肤）
   const { readBrandConfig } = require('./utils/config');
   readBrandConfig().then(config => {
@@ -327,7 +327,7 @@ heartbeatTimer.unref(); // 不阻止进程退出
 // visitorId 格式白名单正则（与 chat.js 保持一致）
 const VISITOR_ID_RE = /^v_\d{10,}_[a-z0-9]{4,20}$/;
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', async (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const type = url.searchParams.get('type');
   const id = url.searchParams.get('id');
@@ -372,7 +372,7 @@ wss.on('connection', (ws, req) => {
     
     // 验证 visitorId 与会话的访客ID是否匹配
     const db = require('./services/database');
-    const conversation = db.conversations.getById(id);
+    const conversation = await db.conversations.getById(id);
     if (!conversation) {
       logger.warn(`拒绝连接: 会话不存在 id=${id}`);
       ws.send(JSON.stringify({ type: 'error', code: 'CONVERSATION_NOT_FOUND', message: '会话不存在' }));

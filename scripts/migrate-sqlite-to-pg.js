@@ -106,6 +106,15 @@ async function main() {
   await pool.query('SELECT 1');
   console.log('[迁移] 目标库连接成功');
 
+  // 清空目标表（全量重建语义：从源同步，可安全重跑；避免测试数据/外键干扰）
+  try {
+    await pool.query(`TRUNCATE TABLE ${TABLES.join(', ')} CASCADE`);
+    console.log('[迁移] 目标表已清空');
+  } catch (e) {
+    if (!/does not exist/i.test(e.message)) throw e;
+    console.log('[迁移] 部分表尚不存在（首次迁移，将由服务启动建表）');
+  }
+
   let total = 0;
   for (const t of TABLES) {
     try {
