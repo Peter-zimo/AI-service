@@ -27,8 +27,11 @@ services:
       dockerfile: Dockerfile
     container_name: ai-cs-langchain
     environment:
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-${DEEPSEEK_API_KEY:-}}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      FALLBACK_API_KEY: ${FALLBACK_API_KEY:-${ZHIPU_API_KEY:-}}
       NODE_API_BASE: http://node-service:3456
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:

@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ========== 1. 语法检查 ==========
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Syntax check all JS
+        run: |
+          find server scripts public/widget -name "*.js" -not -path "*/node_modules/*" | while read f; do
+            node --check "$f" || exit 1
+          done
+          echo "All JS files passed syntax check"
+
+  # ========== 2. PostgreSQL 集成验证（真实 PG 容器） ==========
+  pg-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ai_customer_service
+          POSTGRES_USER: ai_service
+          POSTGRES_PASSWORD: testpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ai_service -d ai_customer_service"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_TYPE: postgres
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: ai_customer_service
+      DB_USER: ai_service
+      DB_PASSWORD: testpass
+      PORT: 3456
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Start server (PostgreSQL mode)
+        run: |
+          node server/index.js > server.log 2>&1 &
+          npx wait-on http://localhost:3456/api/health --timeout 60000
+      - name: Verify schema initialized
+        run: |
+          PGPASSWORD=testpass psql -h localhost -U ai_service -d ai_customer_service -c "\dt" | grep -E "conversations|messages|knowledge"
+      - name: API smoke test
+        run: |
+          TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
+            -d '{"username":"admin","password":"admin123"}' \
+            http://localhost:3456/api/auth/login | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['accessToken'])")
+          echo "Login OK"
+          curl -s http://localhost:3456/api/knowledge -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print('Knowledge items:', len(d.get('data',[])))"
+          curl -s http://localhost:3456/api/stats/overview -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print('Stats OK:', d.get('success'))"
+          curl -s -X POST -H "Content-Type: application/json" \
+            -d '{"visitorId":"v_ci_abcdefgh","visitorName":"CI"}' \
+            http://localhost:3456/api/chat/create | python3 -c "import sys,json; print('Chat create:', json.load(sys.stdin).get('conversationId','FAIL')[:12])"
+      - name: Show server log on failure
+        if: failure()
+        run: tail -50 server.log
+
+  # ========== 3. Docker 镜像构建 ==========
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Node service image
+        run: docker build -t ai-cs-node:ci -f Dockerfile .
+      - name: Build AI service image (if source present)
+        run: |
+          if [ -d ai-service-langchain ]; then
+            docker build -t ai-cs-langchain:ci -f ai-service-langchain/Dockerfile ai-service-langchain
+          else
+            echo "ai-service-langchain source not in repo, skipping AI service build"
+          fi

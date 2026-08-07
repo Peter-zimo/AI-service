@@ -24,6 +24,8 @@ if (process.env.DB_TYPE === 'postgres') {
   };
   console.log('[DB] 使用 PostgreSQL 引擎');
   module.exports = db;
+  // 异步初始化表结构（PG 方言）
+  pg.ensureSchema().catch(e => console.error('[PG] 建表失败:', e.message));
   return;
 }
 

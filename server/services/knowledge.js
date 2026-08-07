@@ -237,13 +237,16 @@ function initKnowledgeTable() {
   }
 
   // 3. FTS5 全文搜索虚拟表（独立表，避免 content sync 的 rowid 映射问题）
+  //    仅 SQLite 支持 FTS5；PG 模式跳过（检索自动降级为语义/传统匹配）
   // 先删除旧表（兼容之前错误的创建），再重建
-  try { db.exec("DROP TABLE IF EXISTS knowledge_fts"); } catch (_) {}
-  db.exec(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
-      question, answer, keywords
-    )
-  `);
+  if (process.env.DB_TYPE !== 'postgres') {
+    try { db.exec("DROP TABLE IF EXISTS knowledge_fts"); } catch (_) {}
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
+        question, answer, keywords
+      )
+    `);
+  }
 
   console.log('[知识库] 数据库表初始化完成');
 }
@@ -273,6 +276,8 @@ function chineseSegment(text) {
 
 // 重建 FTS5 索引（独立表：清空后，逐行分词后插入）
 function rebuildFTS5() {
+  // PG 无 FTS5，跳过（检索走语义/传统降级）
+  if (process.env.DB_TYPE === 'postgres') return;
   try {
     db.exec("DELETE FROM knowledge_fts");
     const insert = db.prepare(`
@@ -340,10 +345,20 @@ function migrateFromJSON() {
 
 function resetToDefault() {
   const now = new Date().toISOString();
-  const insert = db.prepare(`
-    INSERT OR REPLACE INTO knowledge (id, question, answer, keywords, embedding, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+  // 双引擎兼容：SQLite 用 INSERT OR REPLACE，PG 用 ON CONFLICT
+  const isPg = process.env.DB_TYPE === 'postgres';
+  const insert = db.prepare(isPg
+    ? `INSERT INTO knowledge (id, question, answer, keywords, embedding, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET
+         question = EXCLUDED.question,
+         answer = EXCLUDED.answer,
+         keywords = EXCLUDED.keywords,
+         embedding = EXCLUDED.embedding,
+         updated_at = EXCLUDED.updated_at`
+    : `INSERT OR REPLACE INTO knowledge (id, question, answer, keywords, embedding, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
   for (const item of defaultKnowledge) {
     insert.run(item.id, item.question, item.answer,
       JSON.stringify(item.keywords), null, now, now);
