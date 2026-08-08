@@ -294,7 +294,7 @@ router.post('/message', async (req, res) => {
           console.log(`[LangChain Agent] 流式完成: ${streamId}`);
         } else {
           const fallback = {
-            answer: '抱歉，根据我的知识库，暂时没有找到与您问题相关的信息。\n\n您可以尝试：\n1. 换一种方式描述您的问题\n2. 输入"转人工"联系真人客服获得帮助\n\n感谢您的理解！',
+            answer: '抱歉，我暂时没有找到与您问题相关的信息。\n\n您可以尝试：\n1. 换一种方式描述您的问题\n2. 输入"转人工"联系真人客服\n\n感谢您的理解！',
             type: 'fallback',
           };
           await db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
@@ -306,13 +306,22 @@ router.post('/message', async (req, res) => {
       } catch (err) {
         console.error(`[LangChain Agent] 请求失败: ${err.message}`);
         metrics.inc('ai_errors_total', ['langchain_failure']);
-        const fallback = {
-          answer: '抱歉，AI 服务暂时不可用，请稍后重试。',
-          type: 'fallback',
-        };
-        await db.messages.add(uuidv4(), conversationId, 'assistant', fallback.answer, null, 'fallback');
+        // Demo 兜底链：AI 服务不可用时，先查本地知识库，命中直接给答案
+        let fallbackAnswer = '抱歉，AI 服务暂时不可用，请稍后重试。\n\n您也可以输入"转人工"联系真人客服，感谢您的理解！';
+        let fallbackType = 'fallback';
+        try {
+          const kbMatch = await knowledgeService.getBestMatch(trimmedMessage);
+          if (kbMatch) {
+            fallbackAnswer = kbMatch.answer;
+            fallbackType = 'knowledge-fallback';
+            console.log(`[LangChain Agent] AI 不可用，知识库兜底命中: ${kbMatch.question}`);
+          }
+        } catch (kbErr) {
+          console.error(`[LangChain Agent] 知识库兜底失败: ${kbErr.message}`);
+        }
+        await db.messages.add(uuidv4(), conversationId, 'assistant', fallbackAnswer, null, fallbackType);
         await db.stats.incrementAiHandled();
-        endStream(streamId, fallback.answer, fallback.type);
+        endStream(streamId, fallbackAnswer, fallbackType);
         // 运营闭环：AI 服务异常也记录
         try { unansweredService.recordQuery(trimmedMessage); } catch(e) {}
       }
