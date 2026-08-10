@@ -28,10 +28,17 @@ function detectAIServiceDir() {
     path.join(ROOT, '..', 'ai-service-langchain'),       // 2. 项目同级（推荐 demo 布局）
     'D:/AI应用/ai-service-langchain',                    // 3. 本机原路径（兜底）
   ].filter(Boolean);
+  // 入口文件支持 run.py（旧）或 main.py（当前），二者存在其一即可
   for (const c of candidates) {
-    if (c && fs.existsSync(path.join(c, 'run.py'))) return c;
+    if (c && (fs.existsSync(path.join(c, 'run.py')) || fs.existsSync(path.join(c, 'main.py')))) return c;
   }
   return candidates[0] || 'D:/AI应用/ai-service-langchain';
+}
+
+function detectAIEntry(dir) {
+  // 优先 run.py（旧入口），无则 main.py（当前入口）
+  if (fs.existsSync(path.join(dir, 'run.py'))) return 'run.py';
+  return 'main.py';
 }
 
 function detectPython() {
@@ -54,7 +61,7 @@ const SERVICES = {
     health: 'http://localhost:8000/api/health',
     cwd: detectAIServiceDir(),
     cmd: detectPython(),
-    args: ['run.py'],
+    args: [detectAIEntry(detectAIServiceDir())],
     log: path.join(LOG_DIR, 'ai-service.log'),
     startDelay: 8000,
     env: {

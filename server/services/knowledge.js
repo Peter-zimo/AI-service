@@ -529,7 +529,7 @@ class KnowledgeService {
         score: cosineSimilarity(queryVec, k.embedding),
         _semanticScore: true
       }))
-      .filter(k => k.score > 0.3) // 阈值过滤，低于 0.3 的不返回
+      .filter(k => k.score > 0.45) // 语义阈值 0.45：过滤无关误命中（实测正确命中 0.9+，无关 0.3-0.4）
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
 
@@ -651,7 +651,9 @@ class KnowledgeService {
     const first = results[0];
     const isLegacy = first.matchedKeywords !== undefined;
 
-    if (isLegacy && first.score >= 2) return first;
+    // legacy 降级路径：阈值 20（仅接受精确包含 30 / 强关键词组合），
+    // 过滤"什么/怎么"等 2 字泛词弱命中（12 分）导致的答非所问
+    if (isLegacy && first.score >= 20) return first;
     if (!isLegacy) {
       // 用原始分做阈值，RRF 分用于排序
       const origScore = first._bestOriginalScore || first.score;
