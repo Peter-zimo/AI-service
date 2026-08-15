@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node --test test/*.test.js",
-    "eval:quality": "node scripts/run-quality-eval.js"
+    "eval:quality": "node scripts/run-quality-eval.js",
+    "verify:release": "node scripts/verify-release.js"
   },
   "dependencies": {
     "axios": "^1.19.0",

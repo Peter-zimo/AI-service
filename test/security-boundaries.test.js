@@ -52,7 +52,10 @@ test('production protects observability endpoints and rejects origins without an
   }
   assert.ok(health, 'server should start on its isolated port');
   assert.equal(health.status, 200);
-  assert.deepEqual(Object.keys(await health.json()).sort(), ['status', 'time']);
+  // 健康契约：Node 自身状态 + LangChain 服务状态（reachable/embedding）
+  const healthBody = await health.json();
+  assert.deepEqual(Object.keys(healthBody).sort(), ['langchain', 'status', 'time']);
+  assert.equal(typeof healthBody.langchain.reachable, 'boolean');
 
   const metrics = await fetch(`${baseUrl}/api/metrics`);
   assert.equal(metrics.status, 401);

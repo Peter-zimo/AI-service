@@ -1,0 +1,33 @@
+name: Release Check
+
+# 仅手动触发；只做验证与构建，不部署、不接触生产数据
+on:
+  workflow_dispatch:
+
+jobs:
+  release-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+      - name: Node syntax check
+        run: node --check server/index.js
+      - name: Run Node tests
+        run: npm test
+      - name: Python tests (if source present)
+        run: |
+          if [ -d ai-service-langchain ]; then
+            python -m pip install -r ai-service-langchain/requirements.txt
+            (cd ai-service-langchain && python -m pytest tests -q)
+          else
+            echo "ai-service-langchain not present, skipping"
+          fi
+      - name: Build Docker image
+        run: docker build -t ai-cs-release:check -f Dockerfile .
+      - name: Print release summary
+        run: |
+          echo "Release check passed."
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Image tag: ai-cs-release:check"

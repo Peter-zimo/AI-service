@@ -135,6 +135,20 @@ docker compose up -d   # 一键编排
 </script>
 ```
 
+## 开发与验证
+
+```bash
+npm test                    # Node 测试（node:test，含健康/质量/安全契约）
+python -m pytest ai-service-langchain/tests -q   # Python 测试（本地 Embedding 编码器）
+npm run verify:release      # 发布前验证：Node 测试 + Python 测试 + Docker Compose 配置校验
+
+# 首次使用本地 Embedding（BGE 中文模型）需下载一次（约 100MB）
+python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-zh-v1.5')"
+```
+
+- 语义检索使用本地 `BAAI/bge-small-zh-v1.5`，不调用任何远程 Embedding API
+- Python 服务 `/api/health` 暴露 `embedding` 字段（模型名/维度/就绪状态），模型不可用时自动降级到关键词检索
+
 ## 配置说明
 
 - **品牌设置**：管理后台 → 品牌设置（名称/Logo/主题色/快捷问题/欢迎语，实时生效）
