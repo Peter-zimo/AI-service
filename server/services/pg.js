@@ -14,12 +14,20 @@
 
 const { Pool } = require('pg');
 
+function getDatabasePassword(env = process.env) {
+  if (env.DB_PASSWORD) return env.DB_PASSWORD;
+  if (env.NODE_ENV === 'production') {
+    throw new Error('DB_PASSWORD must be set in production');
+  }
+  return undefined;
+}
+
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   database: process.env.DB_NAME || 'ai_customer_service',
   user: process.env.DB_USER || 'ai_service',
-  password: process.env.DB_PASSWORD || 'changeme',
+  password: getDatabasePassword(),
   max: parseInt(process.env.DB_POOL_MAX || '20'),
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
@@ -199,4 +207,4 @@ async function close() {
   await pool.end();
 }
 
-module.exports = { query, queryOne, execute, transaction, healthCheck, close, pool, ensureSchema, convertPlaceholders };
+module.exports = { query, queryOne, execute, transaction, healthCheck, close, pool, ensureSchema, convertPlaceholders, getDatabasePassword };

@@ -154,6 +154,10 @@ function initSchema() {
     if (e.code !== 'SQLITE_READONLY') console.error('[SQLite] 创建 action_logs 表失败:', e.message);
   }
 
+  // 质量评测审计：发布门槛集运行、单条证据与 Badcase 闭环。
+  db.exec(`
+  `);
+
   // 创建索引（加速查询）
   try {
     db.exec(`
@@ -330,10 +334,13 @@ function backupDatabase() {
     console.error('[SQLite] 备份失败:', e.message);
   }
 }
-backupDatabase(); // 启动时备份一次
-setInterval(() => {
-  const now = new Date();
-  if (now.getHours() === 3 && now.getMinutes() < 1) backupDatabase();
-}, 60 * 60 * 1000);
+if (process.env.DISABLE_DB_BACKUP !== 'true') {
+  backupDatabase(); // 启动时备份一次
+  const backupTimer = setInterval(() => {
+    const now = new Date();
+    if (now.getHours() === 3 && now.getMinutes() < 1) backupDatabase();
+  }, 60 * 60 * 1000);
+  backupTimer.unref();
+}
 
 module.exports = db;

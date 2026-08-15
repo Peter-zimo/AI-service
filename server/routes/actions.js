@@ -15,6 +15,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../services/sqlite');
 const { v4: uuidv4 } = require('uuid');
+const { jwtAuth } = require('../middleware/auth');
 
 // visitorId 格式白名单（同步 chat.js）
 const VISITOR_ID_RE = /^v_\d{10,}_[a-z0-9]{4,20}$/;
@@ -38,7 +39,7 @@ function logAction(conversationId, visitorId, action, params, result, status) {
 // ============ 读操作 ============
 
 // 查订单列表
-router.get('/orders', (req, res) => {
+router.get('/orders', jwtAuth(['admin']), (req, res) => {
   try {
     const { phone, visitorId } = req.query;
     if (!phone || phone.length < 8) {
@@ -75,7 +76,7 @@ router.get('/orders', (req, res) => {
 });
 
 // 查单个订单
-router.get('/order/:id', (req, res) => {
+router.get('/order/:id', jwtAuth(['admin']), (req, res) => {
   try {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     if (!order) {

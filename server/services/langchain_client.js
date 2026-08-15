@@ -6,6 +6,7 @@
 const http = require('http');
 
 const LANGCHAIN_SERVICE = process.env.LANGCHAIN_SERVICE_URL || 'http://localhost:8000';
+const AI_SERVICE_TOKEN = process.env.AI_SERVICE_TOKEN || '';
 
 /**
  * 解析 hostname 和 port
@@ -30,6 +31,7 @@ function request(method, path, body = null) {
       method,
       headers: {
         'Content-Type': 'application/json',
+        ...(AI_SERVICE_TOKEN ? { 'X-Internal-Service-Token': AI_SERVICE_TOKEN } : {}),
         ...(postData ? { 'Content-Length': Buffer.byteLength(postData) } : {}),
       },
       timeout: 30000,
@@ -103,6 +105,10 @@ async function getBestMatch(query) {
   return request('GET', `/api/kb/best-match?query=${encoded}`);
 }
 
+async function expandKnowledge(question, answer, requestFn = request) {
+  return requestFn('POST', '/api/kb/expand', { question, answer });
+}
+
 /**
  * 健康检查
  */
@@ -116,5 +122,6 @@ module.exports = {
   getStreamBody,
   searchKnowledge,
   getBestMatch,
+  expandKnowledge,
   health,
 };

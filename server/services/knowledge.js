@@ -14,7 +14,6 @@
 const db = require('./sqlite');
 const path = require('path');
 const fs = require('fs');
-const axios = require('axios');
 
 // ============ 配置读取 ============
 
@@ -56,52 +55,9 @@ function getConfigValue(provider, key) {
   return '';
 }
 
-// ============ Embedding API 调用 ============
-// 用 DeepSeek embedding API，失败时降级到智谱 embedding
-
-const EMBEDDING_DIM = 1024;  // text-embedding-v2 输出维度
-
 async function computeEmbedding(text) {
   if (!text || !text.trim()) return null;
-  const input = text.trim().slice(0, 512); // 截断过长文本
-
-  // 1. 尝试 DeepSeek
-  const dsKey = getConfigValue('deepseek', 'apiKey');
-  if (dsKey) {
-    try {
-      const res = await axios.post('https://api.deepseek.com/v1/embeddings', {
-        input,
-        model: 'text-embedding-v2'
-      }, {
-        headers: { 'Authorization': `Bearer ${dsKey}`, 'Content-Type': 'application/json' },
-        timeout: 10000
-      });
-      if (res.data?.data?.[0]?.embedding) return res.data.data[0].embedding;
-    } catch (e) {
-      console.error('[知识库 Embedding] DeepSeek 失败:', e.message);
-    }
-  }
-
-  // 2. 降级到智谱
-  const zpKey = getConfigValue('zhipu', 'apiKey');
-  if (zpKey) {
-    try {
-      const res = await axios.post('https://open.bigmodel.cn/api/paas/v4/embeddings', {
-        input,
-        model: 'embedding-2'
-      }, {
-        headers: { 'Authorization': `Bearer ${zpKey}`, 'Content-Type': 'application/json' },
-        timeout: 10000
-      });
-      if (res.data?.data?.[0]?.embedding) return res.data.data[0].embedding;
-    } catch (e) {
-      console.error('[知识库 Embedding] 智谱失败:', e.message);
-    }
-  }
-
-  // 3. 本地 fallback（零依赖，保证 RAG 演示始终可用）
-  // 用字符 unigram+bigram 哈希到 128 维向量，配合余弦相似度做语义近似
-  return localEmbedding(input);
+  return localEmbedding(text.trim().slice(0, 512));
 }
 
 // ============ 本地 Embedding（零依赖 fallback） ============
@@ -508,7 +464,7 @@ class KnowledgeService {
           score: cosineSimilarity(queryVec, localEmbedding(k.question + ' ' + (k.answer || ''))),
           _semanticScore: true
         }))
-        .filter(k => k.score > 0.25)
+        .filter(k => k.score > 0.5) // 本地向量阈值 0.5：实测自命中 0.94+、相关 0.51、无关 <0.49
         .sort((a, b) => b.score - a.score)
         .slice(0, 5);
       return scored;
@@ -529,7 +485,7 @@ class KnowledgeService {
         score: cosineSimilarity(queryVec, k.embedding),
         _semanticScore: true
       }))
-      .filter(k => k.score > 0.45) // 语义阈值 0.45：过滤无关误命中（实测正确命中 0.9+，无关 0.3-0.4）
+      .filter(k => k.score > 0.55) // 哈希向量会在 0.5 附近碰撞；纯语义需更高置信
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
 
@@ -594,6 +550,13 @@ class KnowledgeService {
         score += 30;
       }
 
+      // 口语问法通常省略了原问题中的部分词，例如“押金多久到账”。
+      // 仅接受有业务含义的双字片段，排除“什么/怎么”等泛词。
+      const genericBigrams = new Set(['什么', '怎么', '如何', '可以', '你们', '我们', '一下']);
+      const hasBusinessOverlap = Array.from({ length: Math.max(0, cleanQuery.length - 1) }, (_, index) => cleanQuery.slice(index, index + 2))
+        .some(part => !genericBigrams.has(part) && cleanQuestion.includes(part));
+      if (hasBusinessOverlap) score += 20;
+
       // 2. 关键词命中
       const matchedKeywords = [];
       for (const keyword of item.keywords) {
@@ -645,6 +608,13 @@ class KnowledgeService {
    */
   async getBestMatch(query) {
     await this._ready;
+    const normalizedQuery = String(query || '').replace(/[？?，。！!.,]/g, '').trim();
+    const exact = this.knowledgeBase.find(item =>
+      item.question.replace(/[？?，。！!.,]/g, '').trim() === normalizedQuery
+    );
+    if (exact) return { ...exact, score: 30, source: 'exact' };
+    const strongLegacy = this.searchLegacy(query)[0];
+    if (strongLegacy && strongLegacy.score >= 20) return strongLegacy;
     const results = await this.search(query);
     if (results.length === 0) return null;
 
@@ -658,6 +628,11 @@ class KnowledgeService {
       // 用原始分做阈值，RRF 分用于排序
       const origScore = first._bestOriginalScore || first.score;
       if (origScore >= 0.04) return first;
+
+      // 混合检索有弱候选时，不能阻断更可靠的关键词兜底。
+      // 例如“押金多久到账”会被 FTS 命中，但应由关键词“押金/到账”确认具体条目。
+      const legacy = this.searchLegacy(query)[0];
+      if (legacy && legacy.score >= 20) return legacy;
     }
 
     return null;
@@ -842,4 +817,7 @@ class KnowledgeService {
 initKnowledgeTable();
 migrateFromJSON();
 
-module.exports = new KnowledgeService();
+const knowledgeService = new KnowledgeService();
+knowledgeService._test = { computeEmbedding };
+
+module.exports = knowledgeService;

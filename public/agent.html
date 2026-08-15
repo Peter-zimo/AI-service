@@ -230,7 +230,9 @@
       // 【修复】动态检测 WebSocket 协议和地址
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsHost = location.host;
-      const wsUrl = wsProtocol + '//' + wsHost + '/ws?type=agent&id=' + encodeURIComponent(agentId);
+      const authHeader = localStorage.getItem('authHeader') || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      const wsUrl = wsProtocol + '//' + wsHost + '/ws?type=agent&id=' + encodeURIComponent(agentId) + '&token=' + encodeURIComponent(token);
       ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {

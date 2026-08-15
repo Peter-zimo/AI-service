@@ -6,13 +6,13 @@ services:
     environment:
       POSTGRES_DB: ai_customer_service
       POSTGRES_USER: ai_service
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ai_service -d ai_customer_service"]
       interval: 10s
@@ -33,9 +33,11 @@ services:
       LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
       FALLBACK_API_KEY: ${FALLBACK_API_KEY:-${ZHIPU_API_KEY:-}}
       NODE_API_BASE: http://node-service:3456
+      DB_TYPE: postgres
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?AI_SERVICE_TOKEN must be set}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-    ports:
-      - "${AI_PORT:-8000}:8000"
+    expose:
+      - "8000"
     restart: unless-stopped
 
   # ========== Node.js 主服务 ==========
@@ -52,8 +54,10 @@ services:
       DB_PORT: 5432
       DB_NAME: ai_customer_service
       DB_USER: ai_service
-      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
       LANGCHAIN_SERVICE_URL: http://ai-service:8000
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?AI_SERVICE_TOKEN must be set}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS must be set}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:

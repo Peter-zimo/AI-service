@@ -4,10 +4,11 @@ const multer = require('multer');
 const knowledgeService = require('../services/knowledge');
 const fs = require('fs');
 const path = require('path');
-const XLSX = require('xlsx');
+const { parseCsv, toCsv } = require('../utils/csv');
+const { expandKnowledge } = require('../services/langchain_client');
 
 // 配置文件上传 — 安全加固
-const ALLOWED_EXTENSIONS = new Set(['.xlsx', '.xls', '.csv', '.json']);
+const ALLOWED_EXTENSIONS = new Set(['.csv', '.json']);
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const storage = multer.diskStorage({
@@ -32,7 +33,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (!ALLOWED_EXTENSIONS.has(ext)) {
-      return cb(new Error(`不支持的文件类型 ${ext}，仅允许 xlsx/xls/csv/json`));
+      return cb(new Error(`不支持的文件类型 ${ext}，仅允许 csv/json`));
     }
     cb(null, true);
   }
@@ -152,6 +153,20 @@ router.post('/reset', async (req, res) => {
   }
 });
 
+router.post('/expand', async (req, res) => {
+  const { question, answer } = req.body || {};
+  if (!question || !answer) {
+    return res.status(400).json({ success: false, error: '问题和答案不能为空' });
+  }
+  try {
+    const result = await expandKnowledge(question, answer);
+    res.status(result.success ? 200 : 502).json(result);
+  } catch (error) {
+    console.error('AI 扩写失败:', error);
+    res.status(502).json({ success: false, error: 'AI 扩写服务暂不可用' });
+  }
+});
+
 // ── 导入：第一步 解析预览（前端拖拽上传触发）──────────────────────────────
 router.post('/import/parse', async (req, res) => {
   upload.single('file')(req, res, async (err) => {
@@ -168,17 +183,14 @@ router.post('/import/parse', async (req, res) => {
       const ext = path.extname(req.file.originalname).toLowerCase();
       let rows = [];
 
-      if (ext === '.xlsx' || ext === '.xls') {
-        const workbook = XLSX.readFile(req.file.path);
-        const sheetName = workbook.SheetNames[0];
-        rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
-      } else if (ext === '.csv') {
-        const workbook = XLSX.readFile(req.file.path, { type: 'file', raw: false });
-        const sheetName = workbook.SheetNames[0];
-        rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+      if (ext === '.csv') {
+        rows = parseCsv(fs.readFileSync(req.file.path, 'utf-8'));
+      } else if (ext === '.json') {
+        const parsed = JSON.parse(fs.readFileSync(req.file.path, 'utf-8'));
+        rows = Array.isArray(parsed) ? parsed : (parsed.knowledge || []);
       } else {
         try { fs.unlinkSync(req.file.path); } catch (_) {}
-        return res.status(400).json({ success: false, error: '仅支持 xlsx/xls/csv 格式' });
+        return res.status(400).json({ success: false, error: '仅支持 csv/json 格式' });
       }
 
       // 用完删除临时文件
@@ -262,29 +274,8 @@ router.post('/batch', async (req, res) => {
     if (req.file) {
       const ext = path.extname(req.file.originalname).toLowerCase();
 
-      if (ext === '.xlsx' || ext === '.xls') {
-        // ---- Excel 解析 ----
-        const workbook = XLSX.readFile(req.file.path);
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-
-        // 字段名兼容：问题/question、答案/answer、关键词/keywords
-        for (const row of rows) {
-          const question = (row['问题'] || row['question'] || '').toString().trim();
-          const answer   = (row['答案'] || row['answer']   || '').toString().trim();
-          const keywords = (row['关键词'] || row['keywords'] || '').toString().trim();
-          if (question && answer) {
-            items.push({ question, answer, keywords });
-          }
-        }
-
-      } else if (ext === '.csv') {
-        // ---- CSV 解析（用 xlsx 库，兼容 UTF-8/GBK） ----
-        const workbook = XLSX.readFile(req.file.path, { type: 'file', raw: false });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (ext === '.csv') {
+        const rows = parseCsv(fs.readFileSync(req.file.path, 'utf-8'));
 
         for (const row of rows) {
           const question = (row['问题'] || row['question'] || '').toString().trim();
@@ -358,25 +349,15 @@ router.get('/export/:format', async (req, res) => {
       '关键词': (item.keywords || []).join(','),
     }));
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 40 }, { wch: 80 }, { wch: 30 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '知识库');
     const now = new Date().toISOString().slice(0, 10);
-
-    if (format === 'xlsx') {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=knowledge_${now}.xlsx`);
-      return res.end(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
-    }
 
     if (format === 'csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename=knowledge_${now}.csv`);
-      return res.send('\uFEFF' + XLSX.utils.sheet_to_csv(ws));
+      return res.send('\uFEFF' + toCsv(rows));
     }
 
-    res.status(400).json({ success: false, error: '不支持的格式，请使用 json / xlsx / csv' });
+    res.status(400).json({ success: false, error: '不支持的格式，请使用 json / csv' });
   } catch (error) {
     console.error('导出失败:', error);
     res.status(500).json({ success: false, error: '导出失败' });

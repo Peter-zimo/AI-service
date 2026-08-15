@@ -29,7 +29,7 @@ const CONVERSATION_MODE = {
 const conversations = {
   create: async (id, visitorId, visitorName) => {
     // 先关闭该访客之前的活跃会话
-    const existingActive = conversations.getActiveByVisitor(visitorId);
+    const existingActive = await conversations.getActiveByVisitor(visitorId);
     if (existingActive) {
       await conversations.close(existingActive.id, 'new_session');
     }
@@ -58,7 +58,7 @@ const conversations = {
   },
 
   updateLastMessage: async (id) => {
-    const c = conversations.getById(id);
+    const c = await conversations.getById(id);
     if (c && c.status !== CONVERSATION_STATUS.CLOSED) {
       const now = new Date().toISOString();
       const updates = { status: c.status === CONVERSATION_STATUS.IDLE ? CONVERSATION_STATUS.ACTIVE : c.status };
@@ -74,7 +74,7 @@ const conversations = {
   },
 
   setIdle: async (id) => {
-    const c = conversations.getById(id);
+    const c = await conversations.getById(id);
     if (c && c.status === CONVERSATION_STATUS.ACTIVE) {
       await db.prepare(`
         UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?
@@ -86,7 +86,7 @@ const conversations = {
   },
 
   close: async (id, reason = 'manual') => {
-    const c = conversations.getById(id);
+    const c = await conversations.getById(id);
     if (c && c.status !== CONVERSATION_STATUS.CLOSED) {
       const now = new Date().toISOString();
       await db.prepare(`
@@ -135,7 +135,7 @@ const conversations = {
   },
 
   setMode: async (id, mode, agentInfo = null) => {
-    const c = conversations.getById(id);
+    const c = await conversations.getById(id);
     if (c && c.status !== CONVERSATION_STATUS.CLOSED) {
       if (agentInfo) {
         await db.prepare(`
@@ -277,11 +277,12 @@ const stats = {
 
 // 启动定时检查
 function startTimeoutChecker() {
-  setInterval(() => {
+  const timer = setInterval(() => {
     // 双引擎兼容：SQLite 同步返回、PG 异步，统一 Promise 处理
     Promise.resolve(conversations.checkTimeouts())
       .catch(e => console.error('[会话] 超时检查失败:', e.message));
   }, conversations.TIMEOUT.CHECK_INTERVAL);
+  timer.unref();
   console.log('[会话] 超时检查定时器已启动，每30秒检查一次');
 }
 
@@ -311,6 +312,7 @@ let _cacheTimer = null;
 function startCacheRefresh() {
   refreshCache().catch(e => console.error('[缓存] 首次刷新失败:', e.message));
   _cacheTimer = setInterval(() => refreshCache().catch(e => console.error('[缓存] 刷新失败:', e.message)), 5000);
+  _cacheTimer.unref();
 }
 function stopCacheRefresh() {
   if (_cacheTimer) { clearInterval(_cacheTimer); _cacheTimer = null; }

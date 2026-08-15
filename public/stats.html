@@ -19,7 +19,6 @@
   <h1>📊 数据统计面板</h1>
   <div class="nav-actions">
     <button class="nav-action" onclick="refreshAll()">🔄 刷新</button>
-    <button class="nav-action" onclick="window.open('/api/stats/export/xlsx','_blank')">📤 Excel</button>
     <button class="nav-action" onclick="window.open('/api/stats/export/csv','_blank')">📄 CSV</button>
     <a class="nav-action" href="/admin.html">⚙️ 返回管理</a>
   </div>
@@ -272,10 +271,15 @@ async function doLogin() {
   if (!u || !p) { errEl.textContent = '请输入账号和密码'; errEl.style.display='block'; return; }
 
   try {
-    const res = await fetch('/api/health', { headers: { 'Authorization': 'Basic ' + btoa(u + ':' + p) } });
-    if (!res.ok) throw new Error('认证失败');
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success || !data.data?.accessToken) throw new Error('认证失败');
 
-    authHeader = 'Basic ' + btoa(u + ':' + p);
+    authHeader = 'Bearer ' + data.data.accessToken;
     localStorage.setItem('authHeader', authHeader);
     localStorage.setItem('currentUser', u);
     

@@ -6,8 +6,11 @@ const path = require('path');
 const WebSocket = require('ws');
 const http = require('http');
 const fs = require('fs');
+const crypto = require('crypto');
 const logger = require('./utils/logger');
 const metrics = require('./utils/metrics');
+const { helmetOptions } = require('./utils/security-headers');
+const { isAllowedOrigin } = require('./utils/cors');
 
 // ===== 全局日志劫持：所有模块的 console.log/warn/error 自动走 winston =====
 const _origConsole = {
@@ -47,9 +50,10 @@ const humanRoutes = require('./routes/human');
 const statsRoutes = require('./routes/stats');
 const unansweredRoutes = require('./routes/unanswered');
 const actionsRoutes = require('./routes/actions');
+const qualityRoutes = require('./routes/quality');
 const authRoutes = require('./routes/auth');
 const humanService = require('./services/human');
-const { jwtAuth, basicAuth, changePassword } = require('./middleware/auth');
+const { jwtAuth, basicAuth, changePassword, verifyWebSocketAgentToken } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3456;
@@ -60,26 +64,21 @@ const server = http.createServer(app);
 // ===== 安全中间件 =====
 
 // 1. helmet — 安全响应头（X-Frame-Options / X-Content-Type-Options / HSTS 等）
-app.use(helmet({
-  // 允许内嵌 iframe（访客端可能被嵌入第三方页面）
-  frameguard: false,
-  // 关闭 CSP，前端用了内联脚本
-  contentSecurityPolicy: false
-}));
+app.use(helmet(helmetOptions));
 
 // 2. CORS — 收窄跨域白名单
 //    生产环境请在 .env 配置 ALLOWED_ORIGINS（逗号分隔）
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
-const allowedOrigins = allowedOriginsEnv
-  ? allowedOriginsEnv.split(',').map(s => s.trim())
-  : null; // null = 开发模式，允许全部
 
 app.use(cors({
   origin: (origin, callback) => {
     // 允许无 Origin 请求（本地直接打开、Postman 等）
-    if (!origin) return callback(null, true);
-    if (!allowedOrigins) return callback(null, true); // 未配置白名单 = 开发模式全放行
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (isAllowedOrigin(origin, process.env.NODE_ENV, allowedOriginsEnv)) {
+      return callback(null, true);
+    }
+    if (process.env.NODE_ENV === 'production' && !allowedOriginsEnv) {
+      return callback(new Error('CORS blocked: production allowlist is required'));
+    }
     callback(new Error(`CORS blocked: ${origin}`));
   },
   credentials: true
@@ -149,28 +148,44 @@ app.use((req, res, next) => {
 
 // 健康检查（增强版——含系统信息）
 app.get('/api/health', async (req, res) => {
-  const os = require('os');
   res.json({
     status: 'ok',
-    time: new Date().toISOString(),
-    uptime: Math.floor(process.uptime()),
-    memory: {
-      heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
-      heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
-    },
-    cpu: os.loadavg()[0]?.toFixed(2) || 'N/A',
-    node: process.version,
-    pid: process.pid,
+    time: new Date().toISOString()
   });
 });
 
+// 登录入口单独收紧，避免管理和客服密码被在线猜测。
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: '登录尝试过于频繁，请15分钟后再试' }
+});
+
 // Prometheus 指标端点（内部网络访问，不暴露公网）
-app.get('/api/metrics', async (req, res) => {
+app.get('/api/metrics', jwtAuth(['admin']), async (req, res) => {
   res.setHeader('Content-Type', 'text/plain; version=0.0.4');
   res.send(metrics.toPrometheusText());
 });
 
+function internalServiceAuth(req, res, next) {
+  const expected = process.env.AI_SERVICE_TOKEN || '';
+  const received = req.get('X-Internal-Service-Token') || '';
+  if (!expected || !received || expected.length !== received.length ||
+      !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) {
+    return res.status(401).json({ success: false, error: '未授权的内部服务调用' });
+  }
+  next();
+}
+
+app.get('/api/internal/knowledge', internalServiceAuth, async (req, res) => {
+  const knowledgeService = require('./services/knowledge');
+  res.json({ success: true, data: await knowledgeService.getAll() });
+});
+
 // 认证路由（登录/刷新/修改密码/当前用户 —— 无需在路由注册处额外认证）
+app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', authRoutes);
 
 // 调试端点（仅开发环境，生产环境返回404）
@@ -291,8 +306,10 @@ app.get('/api/config/brand', async (req, res) => {
 
 // ============ 管理 API（JWT 认证 + 角色分权）============
 app.use('/api/knowledge', adminLimiter, jwtAuth(['admin', 'agent']), knowledgeRoutes);
+app.use('/api/quality', adminLimiter, jwtAuth(['admin']), qualityRoutes);
 app.use('/api/config', adminLimiter, jwtAuth(['admin']), configRoutes.router);
 app.use('/api/sensitive', adminLimiter, jwtAuth(['admin', 'agent']), sensitiveRoutes);
+app.use('/api/human/login', loginLimiter);
 app.use('/api/human', (req, res, next) => {
   if (req.path === '/login') return next();  // 登录接口放行
   return jwtAuth(['agent', 'admin'])(req, res, next);
@@ -332,6 +349,7 @@ wss.on('connection', async (ws, req) => {
   const type = url.searchParams.get('type');
   const id = url.searchParams.get('id');
   const visitorId = url.searchParams.get('visitorId');
+  const token = url.searchParams.get('token');
 
   // 标记为存活
   ws.isAlive = true;
@@ -340,6 +358,11 @@ wss.on('connection', async (ws, req) => {
   logger.info(`新连接: type=${type}, id=${id}`);
 
   if (type === 'agent' && id) {
+    if (!verifyWebSocketAgentToken(token, id)) {
+      ws.send(JSON.stringify({ type: 'error', code: 'UNAUTHORIZED', message: '身份验证失败' }));
+      ws.close(1008, 'Unauthorized');
+      return;
+    }
     // 【P1-2安全修复】客服连接必须验证身份：agentId 必须在系统中存在且当前在线
     const agent = humanService.getAgentById(id);
     if (!agent) {

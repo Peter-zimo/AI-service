@@ -42,14 +42,15 @@ router.get('/ai/detail', async (req, res) => {
         llm: {
           provider: config.llm.provider,
           baseUrl: config.llm.baseUrl,
-          apiKey: config.llm.apiKey,
+          // 【安全修复】不再向浏览器返回完整 API Key，仅返回脱敏版本
+          apiKey: '',
           apiKeyMasked: maskKey(config.llm.apiKey),
           model: config.llm.model,
           temperature: config.llm.temperature
         },
         fallback: {
           baseUrl: config.fallback.baseUrl,
-          apiKey: config.fallback.apiKey,
+          apiKey: '',
           apiKeyMasked: maskKey(config.fallback.apiKey),
           model: config.fallback.model
         },

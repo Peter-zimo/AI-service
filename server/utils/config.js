@@ -102,7 +102,7 @@ async function saveAIConfig(config) {
     ...config,
     updatedAt: new Date().toISOString()
   };
-  await fs.writeFile(CONFIG_FILE, JSON.stringify(data, null, 2), 'utf8');
+  await atomicWriteJson(CONFIG_FILE, data);
   return data;
 }
 
@@ -157,8 +157,14 @@ async function saveBrandConfig(config) {
     ...config,
     updatedAt: new Date().toISOString()
   };
-  await fs.writeFile(BRAND_FILE, JSON.stringify(data, null, 2), 'utf8');
+  await atomicWriteJson(BRAND_FILE, data);
   return data;
+}
+
+async function atomicWriteJson(file, data) {
+  const tempFile = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tempFile, JSON.stringify(data, null, 2), { encoding: 'utf8', mode: 0o600 });
+  await fs.rename(tempFile, file);
 }
 
 module.exports = {

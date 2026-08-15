@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sensitiveService = require('../services/sensitive');
-const XLSX = require('xlsx');
+const { toCsv } = require('../utils/csv');
 
 // 获取所有敏感词（转换为前端期望的格式）
 router.get('/words', (req, res) => {
@@ -165,24 +165,13 @@ router.get('/export/:format', (req, res) => {
       }
     }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 12 }, { wch: 40 }, { wch: 20 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '敏感词');
-
-    if (req.params.format === 'xlsx') {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=sensitive_words_${now}.xlsx`);
-      return res.end(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
-    }
-
     if (req.params.format === 'csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename=sensitive_words_${now}.csv`);
-      return res.send('\uFEFF' + XLSX.utils.sheet_to_csv(ws));
+      return res.send('\uFEFF' + toCsv(rows));
     }
 
-    res.status(400).json({ success: false, error: '不支持的格式，请使用 json / xlsx / csv' });
+    res.status(400).json({ success: false, error: '不支持的格式，请使用 json / csv' });
   } catch (error) {
     console.error('导出失败:', error);
     res.status(500).json({ success: false, error: '导出失败' });

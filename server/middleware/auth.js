@@ -30,7 +30,9 @@ function loadAuthConfig() {
 }
 
 function saveAuthConfig(config) {
-  fs.writeFileSync(AUTH_FILE, JSON.stringify(config, null, 2), 'utf-8');
+  const tempFile = `${AUTH_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tempFile, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  fs.renameSync(tempFile, AUTH_FILE);
 }
 
 // ============ JWT 编解码（纯 crypto，零依赖）============
@@ -75,6 +77,26 @@ function verify(token, secret) {
   }
 }
 
+function verifyWebSocketAgentToken(token, agentId, secret = getJwtSecret()) {
+  if (!token || !agentId) return null;
+  const payload = verify(token, secret);
+  if (!payload || !canManageAgent(payload, agentId)) return null;
+  return payload;
+}
+
+function canManageAgent(auth, agentId) {
+  return Boolean(auth && agentId && (
+    auth.role === 'admin' || (auth.role === 'agent' && auth.agentId === agentId)
+  ));
+}
+
+function isTokenPayloadCurrent(payload, users) {
+  const user = (users || []).find(item => item.username === payload.sub);
+  // Human-agent tokens use `agent:<id>` and are managed by the human service.
+  if (!user) return String(payload.sub || '').startsWith('agent:');
+  return (payload.tokenVersion || 0) === (user.tokenVersion || 0);
+}
+
 // ============ JWT 中间件 ============
 
 function jwtAuth(requiredRoles = []) {
@@ -93,13 +115,16 @@ function jwtAuth(requiredRoles = []) {
     if (!payload) {
       return res.status(401).json({ success: false, message: '令牌无效或已过期' });
     }
+    if (!isTokenPayloadCurrent(payload, loadAuthConfig().users)) {
+      return res.status(401).json({ success: false, message: '令牌已失效，请重新登录' });
+    }
 
     // 角色校验
     if (requiredRoles.length > 0 && !requiredRoles.includes(payload.role)) {
       return res.status(403).json({ success: false, message: '权限不足' });
     }
 
-    req.auth = { username: payload.sub, role: payload.role };
+    req.auth = { username: payload.sub, role: payload.role, agentId: payload.agentId };
     next();
   };
 }
@@ -142,8 +167,10 @@ async function login(req, res) {
     }
 
     const secret = getJwtSecret();
-    const accessToken = sign({ sub: username, role: user.role || 'agent' }, secret, 3600);
-    const refreshToken = sign({ sub: username, type: 'refresh' }, secret, 86400 * 7);
+    const tokenVersion = user.tokenVersion || 0;
+    const accessToken = sign({ sub: username, role: user.role || 'agent', tokenVersion }, secret, 3600);
+    // 【安全修复】refresh token 携带 role，避免刷新后被降级为 agent
+    const refreshToken = sign({ sub: username, role: user.role || 'agent', type: 'refresh', tokenVersion }, secret, 86400 * 7);
 
     console.log(`[Auth] 用户 ${username} 登录成功, role: ${user.role || 'agent'}`);
     res.json({
@@ -173,8 +200,12 @@ function refreshToken(req, res) {
   if (!payload || payload.type !== 'refresh') {
     return res.status(401).json({ success: false, message: 'refreshToken 无效' });
   }
+  const config = loadAuthConfig();
+  if (!isTokenPayloadCurrent(payload, config.users)) {
+    return res.status(401).json({ success: false, message: 'refreshToken 已失效，请重新登录' });
+  }
 
-  const accessToken = sign({ sub: payload.sub, role: payload.role || 'agent' }, secret, 3600);
+  const accessToken = sign({ sub: payload.sub, role: payload.role || 'agent', tokenVersion: payload.tokenVersion || 0 }, secret, 3600);
   res.json({ success: true, data: { accessToken, expiresIn: 3600 } });
 }
 
@@ -185,6 +216,10 @@ async function changePassword(req, res) {
 
   if (!username || !oldPassword || !newPassword) {
     return res.status(400).json({ success: false, message: '参数不完整' });
+  }
+  // 【安全修复】只能修改当前登录用户自己的密码，防止越权改密
+  if (!req.auth || req.auth.username !== username) {
+    return res.status(403).json({ success: false, message: '无权修改他人密码' });
   }
   if (newPassword.length < 6) {
     return res.status(400).json({ success: false, message: '新密码至少6位' });
@@ -204,6 +239,7 @@ async function changePassword(req, res) {
     if (!oldMatch) return res.status(401).json({ success: false, message: '旧密码错误' });
 
     user.password = await bcrypt.hash(newPassword, 10);
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     saveAuthConfig(config);
 
     res.json({ success: true, message: '密码修改成功' });
@@ -213,4 +249,4 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = { jwtAuth, basicAuth, login, refreshToken, changePassword, getJwtSecret, sign, verify };
+module.exports = { jwtAuth, basicAuth, login, refreshToken, changePassword, getJwtSecret, sign, verify, verifyWebSocketAgentToken, canManageAgent, isTokenPayloadCurrent };

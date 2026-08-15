@@ -107,6 +107,7 @@
       <div class="nav-section">知识管理</div>
       <button class="nav-item" id="nav-knowledge" onclick="switchTab('knowledge')">📚 知识库</button>
       <button class="nav-item" id="nav-unanswered" onclick="switchTab('unanswered')">📝 待补充知识</button>
+      <button class="nav-item" id="nav-quality" onclick="switchTab('quality')">✅ 质量评测</button>
       <div class="nav-section">系统设置</div>
       <button class="nav-item" id="nav-brand" onclick="switchTab('brand')">🎨 品牌设置</button>
       <button class="nav-item" id="nav-sensitive" onclick="switchTab('sensitive')">🚫 敏感词管理</button>
@@ -252,7 +253,6 @@
         <div class="page-title" style="margin:0">对话记录</div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-secondary" onclick="loadConversations()">🔄 刷新</button>
-          <button class="btn btn-secondary" onclick="window.open('/api/chat/export/xlsx','_blank')" style="font-size:13px;">📊 Excel</button>
           <button class="btn btn-secondary" onclick="window.open('/api/chat/export/csv','_blank')" style="font-size:13px;">📄 CSV</button>
         </div>
       </div>
@@ -271,7 +271,6 @@
         <div style="display:flex;gap:8px;">
           <button class="btn btn-secondary" onclick="openImportModal()" style="font-size:13px;">📥 导入</button>
           <button class="btn btn-secondary" onclick="batchAIExpand()" style="font-size:13px;">🤖 AI扩写</button>
-          <button class="btn btn-secondary" onclick="window.open('/api/knowledge/export/xlsx','_blank')" style="font-size:13px;">📤 Excel导出</button>
           <button class="btn btn-secondary" onclick="window.open('/api/knowledge/export/csv','_blank')" style="font-size:13px;">📄 CSV导出</button>
           <button class="btn btn-primary" onclick="openAddModal()">＋ 添加问答</button>
         </div>
@@ -308,12 +307,27 @@
       </div>
     </div>
 
+    <!-- ===== 质量评测（仅审阅；本地命令运行评测） ===== -->
+    <div id="tab-quality" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="page-title" style="margin:0">✅ 质量评测</div>
+        <button class="btn btn-secondary" onclick="loadQualityReview()">🔄 刷新</button>
+      </div>
+      <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-label">最近评测总数</div><div id="quality-total" class="stat-value stat-blue">—</div></div>
+        <div class="stat-card"><div class="stat-label">最近通过率</div><div id="quality-rate" class="stat-value stat-green">—</div></div>
+        <div class="stat-card"><div class="stat-label">最近 Badcase</div><div id="quality-failed" class="stat-value stat-amber">—</div></div>
+      </div>
+      <div class="card"><div class="card-title">评测运行记录</div><div id="quality-runs" class="empty">加载中...</div></div>
+      <div class="card"><div class="card-title">Badcase（选择一次运行后查看）</div><div id="quality-cases" class="empty">请先选择运行记录</div></div>
+      <div class="card"><div class="card-title">真实问题候选池</div><div id="quality-candidates" class="empty">加载中...</div></div>
+    </div>
+
     <!-- ===== 敏感词管理 ===== -->
     <div id="tab-sensitive" class="tab-content">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <div class="page-title" style="margin:0">🚫 敏感词管理</div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-secondary" onclick="window.open('/api/sensitive/export/xlsx','_blank')" style="font-size:13px;">📤 Excel导出</button>
           <button class="btn btn-secondary" onclick="window.open('/api/sensitive/export/csv','_blank')" style="font-size:13px;">📄 CSV导出</button>
           <button class="btn btn-primary" onclick="openSensitiveModal()">＋ 添加敏感词</button>
         </div>
@@ -634,21 +648,20 @@
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:20px;margin-bottom:16px;">
         <div style="font-size:14px;font-weight:600;color:#0369a1;margin-bottom:10px;">📌 导入说明</div>
         <ul style="margin:0;padding-left:18px;font-size:13px;color:#0369a1;line-height:2;">
-          <li>支持 <strong>.csv</strong> 和 <strong>.xlsx</strong> 文件</li>
+          <li>支持 <strong>.csv</strong> 和 <strong>.json</strong> 文件</li>
           <li>文件需包含「<strong>问题</strong>」和「<strong>答案</strong>」两列（关键词列可选）</li>
           <li>关键词用逗号分隔，如：<code>时间,上班,营业</code></li>
           <li>重复问题会自动跳过</li>
         </ul>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:16px;">
-        <a href="/knowledge_template.xlsx" download class="btn btn-secondary" style="flex:1;text-align:center;text-decoration:none;">📊 下载 Excel 模板</a>
         <a href="/knowledge_template.csv" download class="btn btn-secondary" style="flex:1;text-align:center;text-decoration:none;">📄 下载 CSV 模板</a>
       </div>
       <div style="border:2px dashed #e5e7eb;border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;" id="import-drop-zone" onclick="document.getElementById('import-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='#2563eb';this.style.background='#eff6ff'" ondragleave="this.style.borderColor='#e5e7eb';this.style.background='transparent'" ondrop="handleImportDrop(event)">
         <div style="font-size:28px;margin-bottom:8px;">📁</div>
         <div style="font-size:14px;color:#374151;font-weight:500;">点击上传文件，或拖拽文件到这里</div>
-        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .xlsx，单文件不超过 2MB</div>
-        <input type="file" id="import-file-input" accept=".csv,.xlsx,text/csv,application/vnd.ms-excel" style="display:none;" onchange="handleImportFile(this.files[0])">
+        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .json，单文件不超过 2MB</div>
+        <input type="file" id="import-file-input" accept=".csv,.json,text/csv,application/json" style="display:none;" onchange="handleImportFile(this.files[0])">
       </div>
     </div>
 
@@ -819,8 +832,54 @@ function switchTab(name) {
   if (name === 'conversations') loadConversations();
   if (name === 'knowledge') loadKnowledge();
   if (name === 'unanswered') loadUnanswered();
+  if (name === 'quality') loadQualityReview();
   if (name === 'brand') loadBrandConfig();
   if (name === 'sensitive') loadSensitiveWords();
+}
+
+const QUALITY_API = '/api/quality';
+let activeQualityRunId = null;
+
+function qualityCauseOptions(selected) {
+  return ['retrieval_threshold','retrieval_wrong_match','reject_failure','system_error','knowledge_gap','answer_inconsistent']
+    .map(value => `<option value="${value}" ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join('');
+}
+function qualityStatusOptions(selected) {
+  return ['open','triaged','fixed','verified','closed']
+    .map(value => `<option value="${value}" ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join('');
+}
+async function loadQualityReview() {
+  try {
+    const [runsRes, candidatesRes] = await Promise.all([apiFetch(QUALITY_API + '/runs'), apiFetch(QUALITY_API + '/candidates')]);
+    const runs = (await runsRes.json()).data || [];
+    const candidates = (await candidatesRes.json()).data || [];
+    const latest = runs[0];
+    document.getElementById('quality-total').textContent = latest ? latest.total : '—';
+    document.getElementById('quality-rate').textContent = latest ? `${Math.round(latest.passed * 100 / Math.max(latest.total, 1))}%` : '—';
+    document.getElementById('quality-failed').textContent = latest ? latest.failed : '—';
+    document.getElementById('quality-runs').innerHTML = runs.length ? runs.map(run => `<div style="padding:8px 0;border-bottom:1px solid #eee"><button class="btn btn-sm btn-secondary" onclick="loadQualityCases('${esc(run.id)}')">查看</button> ${esc(run.started_at)} · ${esc(run.suite_version)} · ${run.passed}/${run.total} · <a href="${QUALITY_API}/runs/${encodeURIComponent(run.id)}/export" target="_blank">CSV</a></div>`).join('') : '暂无本地评测记录。请在项目目录运行质量评测命令。';
+    document.getElementById('quality-candidates').innerHTML = candidates.length ? candidates.map(row => `<div style="padding:6px 0;border-bottom:1px solid #eee">${esc(row.query)} <span style="color:#999">×${row.count}</span></div>`).join('') : '暂无候选问题';
+    if (activeQualityRunId) loadQualityCases(activeQualityRunId);
+  } catch (error) { toast('加载质量评测失败：' + error.message, 'error'); }
+}
+async function loadQualityCases(runId) {
+  activeQualityRunId = runId;
+  const el = document.getElementById('quality-cases');
+  el.textContent = '加载中...';
+  try {
+    const data = await (await apiFetch(QUALITY_API + '/runs/' + encodeURIComponent(runId) + '/cases?failed=true')).json();
+    const rows = data.data || [];
+    el.innerHTML = rows.length ? rows.map(row => { const bad = row.badcase; return `<div style="padding:12px 0;border-bottom:1px solid #eee"><div><b>${esc(row.case_id)}</b> ${esc(row.query)} → ${esc(row.actual_question || '未命中')}</div><select id="qc-cause-${esc(bad.id)}">${qualityCauseOptions(bad.cause)}</select> <select id="qc-status-${esc(bad.id)}">${qualityStatusOptions(bad.status)}</select><input id="qc-note-${esc(bad.id)}" value="${esc(bad.note || '')}" placeholder="处理备注" style="margin:6px;width:220px"><button class="btn btn-sm btn-primary" onclick="saveQualityBadcase('${esc(bad.id)}')">保存</button></div>`; }).join('') : '本次运行没有 Badcase';
+  } catch (error) { el.textContent = '加载失败：' + error.message; }
+}
+async function saveQualityBadcase(id) {
+  const cause = document.getElementById('qc-cause-' + id).value;
+  const status = document.getElementById('qc-status-' + id).value;
+  const note = document.getElementById('qc-note-' + id).value;
+  const res = await apiFetch(QUALITY_API + '/badcases/' + encodeURIComponent(id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cause, status, note }) });
+  if (!res.ok) throw new Error((await res.json()).error || '保存失败');
+  toast('Badcase 已更新');
+  loadQualityCases(activeQualityRunId);
 }
 
 /* ===== 跳转统计面板（同页面导航，避免弹窗拦截）===== */
@@ -1325,10 +1384,18 @@ async function loadUnanswered() {
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-left:16px;flex-shrink:0;">
-          <button class="btn btn-primary btn-sm" onclick="showAnswerModal('${item.id}', '${esc(item.query)}')">✏️ 补充答案</button>
-          <button class="btn btn-secondary btn-sm" onclick="dismissUnanswered('${item.id}')">忽略</button>
+          <button class="btn btn-primary btn-sm" data-action="answer" data-id="${escAttr(item.id)}" data-query="${escAttr(item.query)}">✏️ 补充答案</button>
+          <button class="btn btn-secondary btn-sm" data-action="dismiss" data-id="${escAttr(item.id)}">忽略</button>
         </div>
       `;
+      const answerBtn = card.querySelector('[data-action="answer"]');
+      answerBtn.addEventListener('click', () => {
+        showAnswerModal(answerBtn.dataset.id, answerBtn.dataset.query);
+      });
+      const dismissBtn = card.querySelector('[data-action="dismiss"]');
+      dismissBtn.addEventListener('click', () => {
+        dismissUnanswered(dismissBtn.dataset.id);
+      });
       listEl.appendChild(card);
     }
   } catch(e) {
@@ -1339,6 +1406,7 @@ async function loadUnanswered() {
 // 补充答案弹窗（精美版）
 function showAnswerModal(id, query) {
   const overlay = document.createElement('div');
+  overlay.className = 'modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease;';
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   overlay.innerHTML = `
@@ -1533,7 +1601,6 @@ async function deleteKb(id, name) {
 
 /* ===== AI知识库扩写 ===== */
 async function batchAIExpand() {
-  const LANGCHAIN_URL = localStorage.getItem('langchain_url') || 'http://localhost:8000';
   try {
     const res = await apiFetch('/api/knowledge');
     if (!res.ok) throw new Error('获取知识库失败');
@@ -1548,7 +1615,7 @@ async function batchAIExpand() {
     for (let i = 0; i < batch.length; i++) {
       const item = batch[i];
       try {
-        const resp = await fetch(`${LANGCHAIN_URL}/api/kb/expand`, {
+        const resp = await apiFetch(API + '/knowledge/expand', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question: item.question, answer: item.answer }),
@@ -1910,14 +1977,14 @@ async function loadAIConfig() {
       document.getElementById('cfg-llm-baseurl').value = cfg.llm?.baseUrl || '';
       document.getElementById('cfg-llm-model').value = cfg.llm?.model || '';
       document.getElementById('cfg-llm-temperature').value = cfg.llm?.temperature ?? 0.7;
-      const llmKey = cfg.llm?.apiKey || '';
+      const llmKey = cfg.llm?.apiKeyMasked || '';
       const llmMasked = cfg.llm?.apiKeyMasked || '';
       const llmKeyInput = document.getElementById('cfg-llm-apikey');
       llmKeyInput.value = '';
       llmKeyInput.placeholder = llmMasked ? ('已保存：' + llmMasked + '，留空保持不变') : 'API Key';
 
       // 备用模型
-      const fbKey = cfg.fallback?.apiKey || '';
+      const fbKey = cfg.fallback?.apiKeyMasked || '';
       const fbMasked = cfg.fallback?.apiKeyMasked || '';
       const hasFallback = !!(cfg.fallback?.baseUrl || fbKey || cfg.fallback?.model);
       document.getElementById('cfg-fallback-enabled').checked = hasFallback;
@@ -2225,13 +2292,12 @@ function handleImportDrop(e) {
 function handleImportFile(file) {
   if (!file) return;
 
-  const allowedTypes = ['text/csv', 'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-  const allowedNames = ['.csv', '.xlsx', '.xls'];
+  const allowedTypes = ['text/csv', 'application/json'];
+  const allowedNames = ['.csv', '.json'];
   const ext = '.' + file.name.split('.').pop().toLowerCase();
 
   if (!allowedTypes.includes(file.type) && !allowedNames.includes(ext)) {
-    toast('只支持 .csv 或 .xlsx 文件', 'error');
+    toast('只支持 .csv 或 .json 文件', 'error');
     return;
   }
   if (file.size > 2 * 1024 * 1024) {
@@ -2266,8 +2332,8 @@ function handleImportFile(file) {
       dropZone.innerHTML = `
         <div style="font-size:28px;margin-bottom:8px;">📁</div>
         <div style="font-size:14px;color:#374151;font-weight:500;">点击上传文件，或拖拽文件到这里</div>
-        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .xlsx，单文件不超过 2MB</div>
-        <input type="file" id="import-file-input" accept=".csv,.xlsx,text/csv,application/vnd.ms-excel" style="display:none;" onchange="handleImportFile(this.files[0])">`;
+        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .json，单文件不超过 2MB</div>
+        <input type="file" id="import-file-input" accept=".csv,.json,text/csv,application/json" style="display:none;" onchange="handleImportFile(this.files[0])">`;
     });
 }
 

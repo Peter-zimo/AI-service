@@ -3,7 +3,14 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const humanService = require('../services/human');
 const db = require('../services/database');
-const { getJwtSecret, sign } = require('../middleware/auth');
+const { getJwtSecret, sign, canManageAgent } = require('../middleware/auth');
+const { canAccessAgentConversation } = require('../utils/access-control');
+
+function requireAgentAccess(req, res, agentId) {
+  if (canManageAgent(req.auth, agentId)) return true;
+  res.status(403).json({ success: false, error: '无权操作该客服账号' });
+  return false;
+}
 
 // 客服登录（登录成功后签发 JWT，供后续 human API 鉴权）
 router.post('/login', async (req, res) => {
@@ -38,6 +45,7 @@ router.post('/online', async (req, res) => {
     if (!agentId) {
       return res.status(400).json({ success: false, error: '缺少agentId' });
     }
+    if (!requireAgentAccess(req, res, agentId)) return;
 
     const result = humanService.goOnline(agentId);
     res.json(result);
@@ -54,6 +62,7 @@ router.post('/offline', async (req, res) => {
     if (!agentId) {
       return res.status(400).json({ success: false, error: '缺少agentId' });
     }
+    if (!requireAgentAccess(req, res, agentId)) return;
 
     humanService.goOffline(agentId);
     res.json({ success: true, message: '已下线' });
@@ -67,6 +76,7 @@ router.post('/offline', async (req, res) => {
 router.get('/agent/:agentId', async (req, res) => {
   try {
     const { agentId } = req.params;
+    if (!requireAgentAccess(req, res, agentId)) return;
     const agent = humanService.agents.get(agentId);
     
     if (!agent) {
@@ -119,6 +129,7 @@ router.post('/send-message', async (req, res) => {
     if (!agentId || !conversationId || !message) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
+    if (!requireAgentAccess(req, res, agentId)) return;
 
     const agent = humanService.agents.get(agentId);
     if (!agent) {
@@ -154,6 +165,7 @@ router.post('/end-conversation', async (req, res) => {
     if (!agentId || !conversationId) {
       return res.status(400).json({ success: false, error: '缺少必要参数' });
     }
+    if (!requireAgentAccess(req, res, agentId)) return;
 
     const agent = humanService.agents.get(agentId);
     if (!agent) {
@@ -188,8 +200,11 @@ router.post('/end-conversation', async (req, res) => {
 router.get('/history/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const messages = await db.messages.getByConversation(conversationId);
     const conversation = await db.conversations.getById(conversationId);
+    if (!canAccessAgentConversation(req.auth, conversation)) {
+      return res.status(403).json({ success: false, error: '无权访问该会话' });
+    }
+    const messages = await db.messages.getByConversation(conversationId);
     
     res.json({
       success: true,

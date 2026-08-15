@@ -13,7 +13,7 @@
 const express = require('express');
 const router = express.Router();
 const dbSvc = require('../services/database');
-const XLSX = require('xlsx');
+const { toCsv } = require('../utils/csv');
 
 // ============ 工具函数 ============
 
@@ -710,37 +710,20 @@ router.get('/export/:format', (req, res) => {
       '星级': star + '星', '评价数': count,
     }));
 
-    const wb = XLSX.utils.book_new();
-
-    // Sheet 1: 概览
-    const ws1 = XLSX.utils.json_to_sheet(overviewRows);
-    ws1['!cols'] = [{ wch: 20 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, ws1, '概览');
-
-    // Sheet 2: 日趋势
     const trendRows = Object.values(trendMap).sort((a, b) => a['日期'].localeCompare(b['日期']));
-    const ws2 = XLSX.utils.json_to_sheet(trendRows);
-    ws2['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(wb, ws2, '日趋势');
-
-    // Sheet 3: 满意度
-    const ws3 = XLSX.utils.json_to_sheet(ratingRows);
-    ws3['!cols'] = [{ wch: 10 }, { wch: 10 }];
-    XLSX.utils.book_append_sheet(wb, ws3, '满意度分布');
-
-    if (format === 'xlsx') {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=stats_${nowStr}.xlsx`);
-      return res.end(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
-    }
 
     if (format === 'csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename=stats_${nowStr}.csv`);
-      return res.send('\uFEFF' + XLSX.utils.sheet_to_csv(ws1));
+      const rows = [
+        ...overviewRows.map(row => ({ section: '概览', ...row })),
+        ...trendRows.map(row => ({ section: '日趋势', ...row })),
+        ...ratingRows.map(row => ({ section: '满意度分布', ...row }))
+      ];
+      return res.send('\uFEFF' + toCsv(rows));
     }
 
-    res.status(400).json({ success: false, error: '不支持的格式，请使用 xlsx / csv' });
+    res.status(400).json({ success: false, error: '不支持的格式，请使用 csv' });
   } catch (error) {
     console.error('导出统计失败:', error);
     res.status(500).json({ success: false, error: '导出失败' });

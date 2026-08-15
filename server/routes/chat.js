@@ -7,8 +7,15 @@ const sensitiveService = require('../services/sensitive');
 const humanService = require('../services/human');
 const knowledgeService = require('../services/knowledge');
 const unansweredService = require('../services/unanswered');
-const XLSX = require('xlsx');
+const { toCsv } = require('../utils/csv');
 const metrics = require('../utils/metrics');
+const { AiStreamClient } = require('../services/stream_client');
+const { canAccessVisitorConversation } = require('../utils/access-control');
+
+// AI 服务流式客户端（双段超时 + 熔断）
+const aiStreamClient = new AiStreamClient({
+  baseUrl: process.env.LANGCHAIN_SERVICE_URL || 'http://localhost:8000',
+});
 
 // visitorId 格式白名单正则
 const VISITOR_ID_RE = /^v_\d{10,}_[a-z0-9]{4,20}$/;
@@ -43,9 +50,22 @@ function errorStream(streamId, errorMsg) {
 // 同一会话的 AI 处理串行执行：流式未完成时下一条消息不会抢占，
 // 避免 AI 服务历史里缺失 assistant 分隔导致"回答上一次问题"的错位
 const langchainQueues = new Map();
+const AI_TASK_TIMEOUT_MS = 90000; // 单任务护栏：超时不再阻塞队列
 function enqueueLangChain(conversationId, task) {
   const prev = langchainQueues.get(conversationId) || Promise.resolve();
-  const next = prev.then(task, task);
+  const guarded = async () => {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`AI 任务超时(${AI_TASK_TIMEOUT_MS}ms)`)), AI_TASK_TIMEOUT_MS);
+      if (timer && timer.unref) timer.unref();
+    });
+    try {
+      return await Promise.race([task(), timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+  const next = prev.then(guarded, guarded);
   langchainQueues.set(conversationId, next);
   next.finally(() => {
     if (langchainQueues.get(conversationId) === next) langchainQueues.delete(conversationId);
@@ -57,6 +77,18 @@ function validateVisitorId(visitorId) {
   if (!visitorId || typeof visitorId !== 'string') return false;
   if (visitorId.length > 64) return false;
   return VISITOR_ID_RE.test(visitorId);
+}
+
+/**
+ * 强制校验访客身份与会话所有权（安全修复：访客接口必须携带并匹配 visitorId）
+ * 返回 null 表示通过；否则返回错误消息。
+ */
+function enforceVisitorAccess(conversation, visitorId) {
+  if (!visitorId) return '缺少visitorId';
+  if (!validateVisitorId(visitorId)) return 'visitorId格式无效';
+  if (!conversation) return '会话不存在';
+  if (conversation.visitor_id !== visitorId) return '无权访问此会话';
+  return null;
 }
 
 // 创建新对话
@@ -96,9 +128,6 @@ router.post('/message', async (req, res) => {
     if (!conversationId) {
       return res.status(400).json({ success: false, error: '缺少conversationId' });
     }
-    if (visitorId && !validateVisitorId(visitorId)) {
-      return res.status(400).json({ success: false, error: 'visitorId格式无效' });
-    }
 
     // 检查会话是否存在且未关闭
     const conversation = await db.conversations.getById(conversationId);
@@ -112,15 +141,11 @@ router.post('/message', async (req, res) => {
         code: 'CONVERSATION_CLOSED'
       });
     }
-    
-    // 【P3-3安全修复】校验 visitorId 是否属于该会话
-    if (visitorId) {
-      if (!validateVisitorId(visitorId)) {
-        return res.status(400).json({ success: false, error: 'visitorId格式无效' });
-      }
-      if (conversation.visitor_id !== visitorId) {
-        return res.status(403).json({ success: false, error: '无权在此会话中发言' });
-      }
+
+    // 【安全修复】强制校验 visitorId 所有权（缺少或不属于该会话均拒绝）
+    const accessErr = enforceVisitorAccess(conversation, visitorId);
+    if (accessErr) {
+      return res.status(403).json({ success: false, error: accessErr });
     }
 
     const trimmedMessage = message.trim();
@@ -183,8 +208,6 @@ router.post('/message', async (req, res) => {
     // → 统一走 LangChain Agent（全量Agent）
     // =====================================
     
-    const LANGCHAIN_URL = process.env.LANGCHAIN_SERVICE_URL || 'http://localhost:8000';
-
     // 创建流式会话
     const streamId = uuidv4();
     streamSessions.set(streamId, {
@@ -199,81 +222,80 @@ router.post('/message', async (req, res) => {
     // 后台异步执行 LangChain Agent 调用（按会话串行排队，保证历史顺序）
     enqueueLangChain(conversationId, async () => {
       try {
-        const response = await fetch(`${LANGCHAIN_URL}/api/chat/stream`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            conversation_id: conversationId,
-            message: trimmedMessage,
-            use_agent: true,  // Agent 自主决策：知识库→AI→转人工→兜底
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`LangChain 返回 ${response.status}`);
+        // 熔断检查：熔断期内跳过 AI 调用，直接走知识库兜底
+        if (aiStreamClient.isBreakerOpen) {
+          throw new Error('AI 服务熔断中，直接走知识库兜底');
         }
 
-        const reader = response.body.getReader();
+        // 带双段超时的流式调用（首字节 30s + 流空闲 15s）
+        const { reader, resetIdle, clearIdle, close } = await aiStreamClient.openChatStream({
+          conversationId,
+          message: trimmedMessage,
+          useAgent: true,  // Agent 自主决策：知识库→AI→转人工→兜底
+        });
+        aiStreamClient.breaker.recordSuccess(); // 服务可达 → 重置失败计数
+
         const decoder = new TextDecoder();
         let fullContent = '';
         let buffer = '';
         let currentEvent = '';
         let detectedSource = 'ai';  // 从 SSE 事件中捕获真实来源（knowledge/ai/fallback）
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+        try {
+          while (true) {
+            resetIdle(); // 每次读取前重置空闲计时（15s 无数据 → abort）
+            const { done, value } = await aiStreamClient.readChunk(reader);
+            if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n');
-          buffer = parts.pop() || '';
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n');
+            buffer = parts.pop() || '';
 
-          for (const line of parts) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('event: ')) {
-              currentEvent = trimmed.slice(7);
-            } else if (trimmed.startsWith('data: ')) {
-              const data = trimmed.slice(6);
-              if (currentEvent === 'token') {
-                try {
-                  const token = JSON.parse(data);
-                  if (token) {
-                    fullContent += token;
-                    writeToStream(streamId, token);
-                  }
-                } catch (_) {}
-              } else if (currentEvent === 'knowledge') {
-                detectedSource = 'knowledge';
-                try {
-                  const parsed = JSON.parse(data);
-                  const content = typeof parsed === 'string' ? parsed : (parsed.fullContent || parsed.content || '');
-                  if (content && !fullContent) fullContent = content;
-                } catch (_) {}
-              } else if (currentEvent === 'end') {
-                try {
-                  const parsed = JSON.parse(data);
-                  if (parsed.type) detectedSource = parsed.type;
-                  const content = typeof parsed === 'string' ? parsed : (parsed.fullContent || parsed.content || '');
-                  if (content && !fullContent) fullContent = content;
-                } catch (_) {}
-              } else if (currentEvent === 'error') {
-                console.error(`[LangChain Agent] 流式错误: ${data}`);
+            for (const line of parts) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('event: ')) {
+                currentEvent = trimmed.slice(7);
+              } else if (trimmed.startsWith('data: ')) {
+                const data = trimmed.slice(6);
+                if (currentEvent === 'token') {
+                  try {
+                    const token = JSON.parse(data);
+                    if (token) {
+                      fullContent += token;
+                      writeToStream(streamId, token);
+                    }
+                  } catch (_) {}
+                } else if (currentEvent === 'knowledge') {
+                  detectedSource = 'knowledge';
+                  try {
+                    const parsed = JSON.parse(data);
+                    const content = typeof parsed === 'string' ? parsed : (parsed.fullContent || parsed.content || '');
+                    if (content && !fullContent) fullContent = content;
+                  } catch (_) {}
+                } else if (currentEvent === 'end') {
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.type) detectedSource = parsed.type;
+                    const content = typeof parsed === 'string' ? parsed : (parsed.fullContent || parsed.content || '');
+                    if (content && !fullContent) fullContent = content;
+                  } catch (_) {}
+                } else if (currentEvent === 'error') {
+                  console.error(`[LangChain Agent] 流式错误: ${data}`);
+                }
+                currentEvent = '';
               }
-              currentEvent = '';
             }
           }
+        } finally {
+          clearIdle(); // 停止空闲计时
+          close();     // 释放连接
         }
 
-        // 流结束 → 用 LangChain LLM 检测敏感词
+        // 流结束 → 用 LangChain LLM 检测敏感词（10s 超时，失败不阻塞）
         if (fullContent) {
           let finalContent = fullContent;
           try {
-            const sensRes = await fetch(`${LANGCHAIN_URL}/api/sensitive/check`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: fullContent }),
-            });
-            const sensData = await sensRes.json();
+            const sensData = await aiStreamClient.checkSensitive(fullContent);
             if (sensData.success && sensData.data?.has_sensitive) {
               console.log(`[LangChain Agent] 语义检测到敏感内容: ${sensData.data.reason}`);
               finalContent = '抱歉，根据我的知识库，暂时没有找到与您问题相关的信息。\n\n您可以尝试：\n1. 换一种方式描述您的问题\n2. 输入"转人工"联系真人客服获得帮助\n\n感谢您的理解！';
@@ -306,6 +328,7 @@ router.post('/message', async (req, res) => {
       } catch (err) {
         console.error(`[LangChain Agent] 请求失败: ${err.message}`);
         metrics.inc('ai_errors_total', ['langchain_failure']);
+        aiStreamClient.breaker.recordFailure(); // 失败计数（连续 N 次 → 熔断）
         // Demo 兜底链：AI 服务不可用时，先查本地知识库，命中直接给答案
         let fallbackAnswer = '抱歉，AI 服务暂时不可用，请稍后重试。\n\n您也可以输入"转人工"联系真人客服，感谢您的理解！';
         let fallbackType = 'fallback';
@@ -348,21 +371,14 @@ router.get('/history/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { visitorId } = req.query; // 访客端必须传递 visitorId
-    
-    // 【P3-3安全修复】校验 visitorId 是否属于该会话
-    if (visitorId) {
-      if (!validateVisitorId(visitorId)) {
-        return res.status(400).json({ success: false, error: 'visitorId格式无效' });
-      }
-      const conversation = await db.conversations.getById(conversationId);
-      if (!conversation) {
-        return res.status(404).json({ success: false, error: '会话不存在' });
-      }
-      if (conversation.visitor_id !== visitorId) {
-        return res.status(403).json({ success: false, error: '无权访问此会话' });
-      }
+
+    // 【安全修复】强制校验 visitorId 所有权（缺少或不属于该会话均拒绝）
+    const conversation = await db.conversations.getById(conversationId);
+    const accessErr = enforceVisitorAccess(conversation, visitorId);
+    if (accessErr) {
+      return res.status(403).json({ success: false, error: accessErr });
     }
-    
+
     const messages = await db.messages.getByConversation(conversationId);
     res.json({ success: true, messages });
   } catch (error) {
@@ -383,21 +399,14 @@ router.post('/rate', async (req, res) => {
     if (!conversationId) {
       return res.status(400).json({ success: false, error: '缺少conversationId' });
     }
-    
-    // 【P3-3安全修复】校验 visitorId 是否属于该会话
-    if (visitorId) {
-      if (!validateVisitorId(visitorId)) {
-        return res.status(400).json({ success: false, error: 'visitorId格式无效' });
-      }
-      const conversation = await db.conversations.getById(conversationId);
-      if (!conversation) {
-        return res.status(404).json({ success: false, error: '会话不存在' });
-      }
-      if (conversation.visitor_id !== visitorId) {
-        return res.status(403).json({ success: false, error: '无权评价此会话' });
-      }
+
+    // 【安全修复】强制校验 visitorId 所有权
+    const conversation = await db.conversations.getById(conversationId);
+    const accessErr = enforceVisitorAccess(conversation, visitorId);
+    if (accessErr) {
+      return res.status(403).json({ success: false, error: accessErr });
     }
-    
+
     const validScore = Math.min(5, Math.max(1, parseInt(score) || 3));
     await db.ratings.add(uuidv4(), conversationId, validScore, comment || null);
     await db.conversations.close(conversationId, 'rated');
@@ -416,23 +425,18 @@ router.post('/close', async (req, res) => {
     if (!conversationId) {
       return res.status(400).json({ success: false, error: '缺少conversationId' });
     }
-    
+
     const conversation = await db.conversations.getById(conversationId);
     if (!conversation) {
       return res.status(404).json({ success: false, error: '会话不存在' });
     }
-    
-    // 【P3-3安全修复】访客端关闭会话必须校验 visitorId
-    // 管理端请求不带 visitorId（通过 admin 认证已有权限）
-    if (visitorId) {
-      if (!validateVisitorId(visitorId)) {
-        return res.status(400).json({ success: false, error: 'visitorId格式无效' });
-      }
-      if (conversation.visitor_id !== visitorId) {
-        return res.status(403).json({ success: false, error: '无权关闭此会话' });
-      }
+
+    // 【安全修复】强制校验 visitorId 所有权（访客关闭必须属于该会话）
+    const accessErr = enforceVisitorAccess(conversation, visitorId);
+    if (accessErr) {
+      return res.status(403).json({ success: false, error: accessErr });
     }
-    
+
     if (conversation.status === db.conversations.STATUS.CLOSED) {
       return res.json({ success: true, message: '会话已处于关闭状态' });
     }
@@ -455,6 +459,9 @@ router.get('/status/:conversationId', async (req, res) => {
     
     if (!conversation) {
       return res.status(404).json({ success: false, error: '会话不存在' });
+    }
+    if (!canAccessVisitorConversation(conversation, req.query.visitorId)) {
+      return res.status(403).json({ success: false, error: '无权访问此会话' });
     }
     
     res.json({
@@ -495,6 +502,13 @@ router.post('/transfer-to-human', async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ success: false, error: '会话不存在' });
     }
+
+    // 【安全修复】强制校验 visitorId 所有权
+    const accessErr = enforceVisitorAccess(conversation, visitorId);
+    if (accessErr) {
+      return res.status(403).json({ success: false, error: accessErr });
+    }
+
     if (conversation.status === db.conversations.STATUS.CLOSED) {
       return res.status(400).json({ success: false, error: '会话已关闭' });
     }
@@ -543,12 +557,19 @@ router.post('/transfer-to-human', async (req, res) => {
 // 取消排队
 router.post('/cancel-queue', async (req, res) => {
   try {
-    const { conversationId } = req.body || {};
+    const { conversationId, visitorId } = req.body || {};
     if (!conversationId) {
       return res.status(400).json({ success: false, error: '缺少conversationId' });
     }
 
     const conversation = await db.conversations.getById(conversationId);
+
+    // 【安全修复】强制校验 visitorId 所有权
+    const accessErr = enforceVisitorAccess(conversation, visitorId);
+    if (accessErr) {
+      return res.status(403).json({ success: false, error: accessErr });
+    }
+
     if (conversation && conversation.mode === db.conversations.MODE.QUEUE) {
       humanService.cancelQueue(conversationId);
       await db.conversations.setMode(conversationId, db.conversations.MODE.AI);
@@ -634,29 +655,18 @@ router.get('/export/:format', async (req, res) => {
       }
     }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 36 }, { wch: 12 }, { wch: 60 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 20 }, { wch: 22 }, { wch: 22 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '对话记录');
-
     // 添加导出说明
     if (rows.length >= MAX_ROWS) {
       console.log(`[导出] 数据量已达上限(${MAX_ROWS}行)，如有需要请分批导出`);
     }
 
-    if (req.params.format === 'xlsx') {
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=conversations_${now}.xlsx`);
-      return res.end(XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }));
-    }
-
     if (req.params.format === 'csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename=conversations_${now}.csv`);
-      return res.send('\uFEFF' + XLSX.utils.sheet_to_csv(ws));
+      return res.send('\uFEFF' + toCsv(rows));
     }
 
-    res.status(400).json({ success: false, error: '不支持的格式，请使用 xlsx / csv' });
+    res.status(400).json({ success: false, error: '不支持的格式，请使用 csv' });
   } catch (error) {
     console.error('导出对话失败:', error);
     res.status(500).json({ success: false, error: '导出失败' });

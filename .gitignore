@@ -35,3 +35,19 @@ archive/
 # 知识库临时导出
 *.xlsx
 *.csv
+server/config/auth.json
+reports/quality/*.json
+reports/quality/*.csv
+
+# 工具产物
+.codegraph/
+.workbuddy/
+
+# 独立子仓库（早期 Python 原型，保留自身 git 历史）
+ai_customer_service/
+
+# 客服账号凭据（bcrypt 哈希，不纳入版本库）
+server/data/agents.json
+
+# 测试运行日志
+test/run-output.txt
