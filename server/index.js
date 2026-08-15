@@ -146,11 +146,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// 健康检查（增强版——含系统信息）
+// 健康检查（增强版——含系统信息与 LangChain 服务状态）
 app.get('/api/health', async (req, res) => {
+  let langchain = { reachable: false, error: 'LangChain 服务连接失败' };
+  try {
+    const langchainClient = require('./services/langchain_client');
+    const health = await Promise.race([
+      langchainClient.health(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('LangChain 服务超时')), 3000)),
+    ]);
+    langchain = { reachable: true, embedding: health.embedding };
+  } catch (e) {
+    langchain = { reachable: false, error: e.message };
+  }
   res.json({
     status: 'ok',
-    time: new Date().toISOString()
+    time: new Date().toISOString(),
+    langchain
   });
 });
 

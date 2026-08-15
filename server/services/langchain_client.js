@@ -19,9 +19,9 @@ function parseUrl(url) {
 /**
  * HTTP 请求封装
  */
-function request(method, path, body = null) {
+function request(method, path, body = null, serviceUrl = LANGCHAIN_SERVICE) {
   return new Promise((resolve, reject) => {
-    const { hostname, port } = parseUrl(LANGCHAIN_SERVICE);
+    const { hostname, port } = parseUrl(serviceUrl);
     const postData = body ? JSON.stringify(body) : null;
 
     const options = {
@@ -124,4 +124,25 @@ module.exports = {
   getBestMatch,
   expandKnowledge,
   health,
+  createLangchainClient,
 };
+
+/**
+ * 创建可注入服务地址的 LangChain 客户端（用于测试与多实例场景）
+ */
+function createLangchainClient(serviceUrl = process.env.LANGCHAIN_SERVICE_URL || 'http://localhost:8000') {
+  const base = serviceUrl.replace(/\/+$/, '');
+  return {
+    health: () => request('GET', '/api/health', null, serviceUrl),
+    chat: (conversationId, message, useAgent = true) =>
+      request('POST', '/api/chat', { conversation_id: conversationId, message, use_agent: useAgent }, serviceUrl),
+    searchKnowledge: (query) => request('GET', `/api/kb/search?query=${encodeURIComponent(query)}`, null, serviceUrl),
+    getBestMatch: (query) => request('GET', `/api/kb/best-match?query=${encodeURIComponent(query)}`, null, serviceUrl),
+    expandKnowledge: (question, answer) =>
+      request('POST', '/api/kb/expand', { question, answer }, serviceUrl),
+    // SSE 流式契约（Node 转发到 Python /api/chat/stream）
+    getStreamUrl: () => `${base}/api/chat/stream`,
+    getStreamBody: (conversationId, message) =>
+      JSON.stringify({ conversation_id: conversationId, message, use_agent: false }),
+  };
+}
