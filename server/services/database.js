@@ -5,25 +5,11 @@
 
 const db = require('./sqlite');
 const { v4: uuidv4 } = require('uuid');
-
-// 会话状态常量
-const CONVERSATION_STATUS = {
-  ACTIVE: 'active',
-  IDLE: 'idle',
-  CLOSED: 'closed'
-};
-
-const TIMEOUT_CONFIG = {
-  IDLE_TIMEOUT: 5 * 60 * 1000,
-  CLOSE_TIMEOUT: 10 * 60 * 1000,
-  CHECK_INTERVAL: 30 * 1000
-};
-
-const CONVERSATION_MODE = {
-  AI: 'ai',
-  QUEUE: 'queue',
-  HUMAN: 'human'
-};
+const {
+  CONVERSATION_STATUS,
+  CONVERSATION_MODE,
+  TIMEOUT_CONFIG,
+} = require('../config/constants');
 
 // 会话服务
 const conversations = {

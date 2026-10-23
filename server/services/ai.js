@@ -1,5 +1,5 @@
 const axios = require('axios');
-const knowledgeService = require('./knowledge');
+const knowledgeService = require('../modules/knowledge');
 const { readAIConfig } = require('../utils/config');
 const fs = require('fs');
 const path = require('path');

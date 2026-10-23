@@ -13,7 +13,7 @@ test('knowledge embedding is available locally without any network client', asyn
   process.env.SQLITE_DB_PATH = dbPath;
   process.env.DISABLE_DB_BACKUP = 'true';
 
-  const knowledge = require('../server/services/knowledge');
+  const knowledge = require('../server/modules/knowledge');
   const vector = await knowledge._test.computeEmbedding('押金怎么退');
 
   assert.equal(vector.length, 128);

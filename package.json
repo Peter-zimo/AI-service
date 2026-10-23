@@ -5,7 +5,9 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node --test test/*.test.js",
+    "test": "node scripts/check-architecture.js && node --test test/*.test.js",
+    "arch": "node scripts/check-architecture.js",
+    "arch:verbose": "node scripts/check-architecture.js --verbose",
     "eval:quality": "node scripts/run-quality-eval.js",
     "verify:release": "node scripts/verify-release.js"
   },

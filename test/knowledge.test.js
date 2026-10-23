@@ -32,7 +32,7 @@ before(async () => {
   process.env.SQLITE_DB_PATH = tmpDb;
   process.env.DISABLE_DB_BACKUP = 'true';
   // 2. 加载知识库（必须在设 env 之后 require）
-  kb = require('../server/services/knowledge');
+  kb = require('../server/modules/knowledge');
   await kb._ready;
 });
 

@@ -32,7 +32,7 @@ async function runEvaluation(options = {}) {
   let quality = options.quality;
 
   if (!knowledge) {
-    knowledge = require('../server/services/knowledge');
+    knowledge = require('../server/modules/knowledge');
     await knowledge._ready;
   }
   if (!quality && options.persist !== false) quality = require('../server/services/quality');

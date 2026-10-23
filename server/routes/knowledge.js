@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const knowledgeService = require('../services/knowledge');
+const knowledgeService = require('../modules/knowledge');
 const fs = require('fs');
 const path = require('path');
 const { parseCsv, toCsv } = require('../utils/csv');

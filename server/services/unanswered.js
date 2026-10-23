@@ -61,7 +61,7 @@ class UnansweredService {
     if (!item) return { success: false, error: '记录不存在' };
 
     // 添加到知识库
-    const knowledgeService = require('./knowledge');
+    const knowledgeService = require('../modules/knowledge');
     const result = knowledgeService.addItem(item.query, answer.trim());
 
     // 更新状态
