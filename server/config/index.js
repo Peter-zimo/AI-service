@@ -117,33 +117,42 @@ const env = {
 // ============ 启动校验 ============
 
 /**
- * 生产环境的关键配置校验。
- * 只在进程启动时调用；返回 { errors, warnings } 由调用方决定如何处理。
+ * 启动配置校验。
+ *
+ * 默认行为：只输出告警，不阻断启动 —— 避免重构引入「线上起不来」的新风险。
+ * 需要严格模式时设置 STRICT_CONFIG=1，关键项缺失将直接拒绝启动。
+ *
+ * @returns {{errors: string[], warnings: string[]}}
  */
 function validate() {
-  const errors = [];
-  const warnings = [];
+  const issues = [];
 
   if (env.isProduction) {
     if (!env.allowedOrigins) {
-      errors.push('生产环境必须配置 ALLOWED_ORIGINS（逗号分隔的跨域白名单）');
+      issues.push('生产环境未配置 ALLOWED_ORIGINS，带 Origin 的跨域请求将被全部拒绝');
     }
-    if (!env.ai.serviceToken || env.ai.serviceToken.length < 32) {
-      errors.push('生产环境 AI_SERVICE_TOKEN 必须配置且不少于 32 位');
+    if (!env.ai.serviceToken) {
+      issues.push('生产环境未配置 AI_SERVICE_TOKEN，内部服务调用将不可用');
+    } else if (env.ai.serviceToken.length < 32) {
+      issues.push('AI_SERVICE_TOKEN 少于 32 位，建议更换为更长的随机串');
     }
     if (!env.security.sensitiveLogKey) {
-      warnings.push('生产环境未设置 SENSITIVE_LOG_KEY，敏感词日志将无法加密');
+      issues.push('生产环境未设置 SENSITIVE_LOG_KEY，敏感词日志将无法加密');
     }
     if (env.db.type === 'postgres' && !env.db.pg.password) {
-      errors.push('使用 PostgreSQL 时必须配置 DB_PASSWORD');
+      issues.push('使用 PostgreSQL 但未配置 DB_PASSWORD');
     }
   }
 
   if (!env.ai.apiKey) {
-    warnings.push('未配置 LLM_API_KEY，AI 生成能力将不可用（知识库检索仍可用）');
+    issues.push('未配置 LLM_API_KEY，AI 生成能力不可用（知识库检索仍可用）');
   }
 
-  return { errors, warnings };
+  // 只有显式开启严格模式才阻断启动
+  if (bool('STRICT_CONFIG', false)) {
+    return { errors: issues, warnings: [] };
+  }
+  return { errors: [], warnings: issues };
 }
 
 /** 对外暴露一份脱敏快照，便于 /api/health 与排障 */

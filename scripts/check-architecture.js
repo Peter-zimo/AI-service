@@ -60,30 +60,25 @@ function stripComments(src) {
 
 function loadAllowlist() {
   const file = path.join(__dirname, 'architecture-allowlist.json');
-  if (!fs.existsSync(file)) return { rules: [], files: {} };
+  if (!fs.existsSync(file)) return { files: {} };
   try {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return { rules: raw.rules || [], files: raw.files || {} };
+    return { files: raw.files || {} };
   } catch (e) {
     console.error(`[架构检查] 无法解析 allowlist: ${e.message}`);
-    return { rules: [], files: {} };
+    return { files: {} };
   }
 }
 
 /**
  * 判断某条违规是否被存量豁免。
- * 支持两级豁免：
- *   - 全局按规则豁免（allowlist.rules）
- *   - 按文件 + 规则豁免（allowlist.files[file].exemptRules）
+ *
+ * 只支持「按文件 + 按规则」这一种豁免粒度 —— 刻意不提供规则级全局豁免，
+ * 否则写一条规则名就能让整条规则永久失效，护栏等于没有。
  */
 function isExempt(violation, allowlist) {
-  if (allowlist.rules.some(r => r.rule === violation.rule)) return true;
-
   const entry = allowlist.files[violation.file];
-  if (entry && Array.isArray(entry.exemptRules) && entry.exemptRules.includes(violation.rule)) {
-    return true;
-  }
-  return false;
+  return !!(entry && Array.isArray(entry.exemptRules) && entry.exemptRules.includes(violation.rule));
 }
 
 // ============ 规则实现 ============

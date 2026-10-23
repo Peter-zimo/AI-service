@@ -206,7 +206,7 @@ function createRetrieval({ repo, getKnowledgeBase, embedding }) {
 
       // 1. 精确包含
       if (cleanQuestion.includes(cleanQuery) || cleanQuery.includes(cleanQuestion)) {
-        score += 30;
+        score += RETRIEVAL.SCORE_EXACT_CONTAINS;
       }
 
       // 2. 业务双字片段重叠（排除"什么/怎么"等泛词）
@@ -214,20 +214,20 @@ function createRetrieval({ repo, getKnowledgeBase, embedding }) {
         { length: Math.max(0, cleanQuery.length - 1) },
         (_, i) => cleanQuery.slice(i, i + 2)
       ).some(part => !GENERIC_BIGRAMS.has(part) && cleanQuestion.includes(part));
-      if (hasBusinessOverlap) score += 20;
+      if (hasBusinessOverlap) score += RETRIEVAL.SCORE_BUSINESS_OVERLAP;
 
       // 3. 关键词命中
       const matchedKeywords = [];
       for (const keyword of item.keywords || []) {
         if (cleanQuery.includes(keyword) || keyword.includes(cleanQuery)) {
-          score += 12;
+          score += RETRIEVAL.SCORE_KEYWORD_HIT;
           matchedKeywords.push(keyword);
         }
       }
 
       // 4. 多关键词组合加分
       if (matchedKeywords.length >= 2) {
-        score += matchedKeywords.length * 6;
+        score += matchedKeywords.length * RETRIEVAL.SCORE_KEYWORD_COMBO_BONUS;
       }
 
       if (score > 0) {
@@ -266,7 +266,7 @@ function createRetrieval({ repo, getKnowledgeBase, embedding }) {
     const exact = knowledgeBase.find(
       item => item.question.replace(PUNCT_LIGHT, '').trim() === normalizedQuery
     );
-    if (exact) return { ...exact, score: 30, source: 'exact' };
+    if (exact) return { ...exact, score: RETRIEVAL.SCORE_EXACT_CONTAINS, source: 'exact' };
 
     const strongLegacy = searchLegacy(query)[0];
     if (strongLegacy && strongLegacy.score >= RETRIEVAL.LEGACY_STRONG_SCORE) {

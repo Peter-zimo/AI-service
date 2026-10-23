@@ -5,9 +5,7 @@
 'use strict';
 
 const chatService = require('./chat.service');
-const repo = require('./chat.repo');
 
 module.exports = {
   listRecentConversations: chatService.listRecentConversations,
-  repo,
 };

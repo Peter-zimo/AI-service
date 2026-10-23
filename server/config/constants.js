@@ -49,6 +49,12 @@ const RETRIEVAL = {
   LEGACY_STRONG_SCORE: 20,         // 传统检索强命中阈值
   ORIGINAL_SCORE_THRESHOLD: 0.04,  // FTS/混合检索原始分阈值
   EMBEDDING_BATCH_DELAY_MS: 200,
+
+  // 传统关键词检索的计分权重（改权重只改这里）
+  SCORE_EXACT_CONTAINS: 30,        // 问题精确包含
+  SCORE_BUSINESS_OVERLAP: 20,      // 有业务含义的双字片段重叠
+  SCORE_KEYWORD_HIT: 12,           // 单个关键词命中
+  SCORE_KEYWORD_COMBO_BONUS: 6,    // 多关键词组合，每个额外加分
 };
 
 /** 消息与输入限制 */

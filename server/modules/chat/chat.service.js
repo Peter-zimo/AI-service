@@ -18,8 +18,9 @@ const MAX_LIMIT = 500;
  * @returns {Promise<Array>} 会话数组，最后一条消息收敛为 lastMessage 字段
  */
 async function listRecentConversations(rawLimit) {
-  const parsed = parseInt(rawLimit, 10);
-  const limit = Math.min(Math.max(Number.isFinite(parsed) ? parsed : DEFAULT_LIMIT, 1), MAX_LIMIT);
+  // 与重构前语义保持一致：非数字或 0 回落到默认值，再收敛到 1~500
+  const parsed = parseInt(rawLimit, 10) || DEFAULT_LIMIT;
+  const limit = Math.min(Math.max(parsed, 1), MAX_LIMIT);
 
   const rows = await repo.listRecentConversations(limit);
 

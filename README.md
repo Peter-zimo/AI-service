@@ -96,18 +96,39 @@ node scripts/seed-demo.js --clean   # 清空
 ```
 AI智能客服V3（node.js版）/
 ├── server/                  # Node.js 后端
-│   ├── index.js             # 主入口（Express + WebSocket + 监控）
-│   ├── routes/              # API 路由（chat/knowledge/stats/auth/human...）
-│   ├── services/            # 业务服务（数据库/知识库/敏感词/AI）
-│   ├── middleware/          # JWT 认证
-│   ├── config/              # 用户配置（auth.json）
-│   └── data/                # SQLite 数据库
-├── ai-service-langchain/    # Python AI 服务（LangChain + DeepSeek）
+│   ├── index.js             # 进程入口（.env / 日志接管 / listen / 优雅退出）
+│   ├── app.js               # Express 装配（中间件顺序、路由挂载、WebSocket）
+│   ├── config/              # 运行时配置（env 类型化、常量、AI 密钥解析）
+│   ├── routes/              # API 路由（只做 取参 → 调 service → 返回）
+│   ├── modules/             # 业务域，每个域自包含
+│   │   ├── knowledge/       #   知识库：repo / service / retrieval / embedding / segment
+│   │   └── chat/            #   会话：repo / service
+│   ├── middleware/          # JWT 认证、限流、安全头、全局错误处理
+│   ├── services/            # 待迁移的旧服务层（B2 批次逐步并入 modules/）
+│   └── data/                # SQLite 数据库与种子数据
+├── scripts/                 # 运维与质量脚本
+│   └── check-architecture.js# 架构护栏（五条硬约束，已接入 npm test）
+├── ai_customer_service/     # Python AI 服务（LangChain + DeepSeek）
 ├── public/                  # 前端（原生 HTML/CSS/JS）
 │   ├── css/                 # 设计系统 theme.css + 各页面样式
 │   ├── js/common.js         # 公共工具库
 │   ├── widget/              # Chat Widget（chat.html/widget.js/demo-site.html）
 │   └── *.html               # 访客端/管理后台/客服台/统计/能力地图
+
+### 分层约定
+
+改代码前先看这几条，能少走很多弯路：
+
+| 层 | 只允许做 | 禁止 |
+|---|---|---|
+| `routes/` | 解析入参 → 调 service → 返回 | 写 SQL、写业务分支 |
+| `modules/*/**.service.js` | 业务编排、事务边界 | 碰 `req`/`res`、写 SQL |
+| `modules/*/**.repo.js` | 数据存取，**全项目唯一写 SQL 的地方** | 写业务判断 |
+| `app.js` | 接线 | 写业务逻辑 |
+
+约束由 `npm run arch` 自动检查，`npm test` 会先跑它，不通过则测试不执行。
+存量文件的豁免登记在 `scripts/architecture-allowlist.json`，只减不增。
+
 ├── scripts/                 # 工具脚本（seed-demo.js 等）
 ├── db/migrations/           # PostgreSQL 迁移
 ├── docker-compose.yml       # 容器编排
