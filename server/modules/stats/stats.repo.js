@@ -29,6 +29,7 @@ async function refresh() {
 }
 
 function startCache() {
+  if (_cacheTimer) return; // 幂等：重复调用（例如清 require 缓存后重载）不会叠加定时器
   refresh().catch(e => console.error('[统计缓存] 首次刷新失败:', e.message));
   _cacheTimer = setInterval(
     () => refresh().catch(e => console.error('[统计缓存] 刷新失败:', e.message)),

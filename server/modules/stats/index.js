@@ -36,8 +36,7 @@ module.exports = {
   incrementMessages: repo.incrementMessages,
   incrementAiHandled: repo.incrementAiHandled,
 
-  // 生命周期（进程启动/退出时调用）
-  startCache: repo.startCache,
+  // 生命周期（进程启动/退出时调用；缓存由模块加载时自动启动）
   stopCache: repo.stopCache,
 };
 

@@ -25,6 +25,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SERVER = path.join(ROOT, 'server');
 const MAX_LINES = 400;
+// 单行长度上限：防止把文件压成一行来绕过行数检查
+const MAX_LINE_LENGTH = 400;
 
 const args = new Set(process.argv.slice(2));
 const AS_JSON = args.has('--json');
@@ -193,7 +195,19 @@ function checkFileSize(files, allowlist) {
 
   for (const file of files) {
     const r = rel(file);
-    const lines = readLines(file).filter(l => l.trim().length > 0).length;
+    const rawLines = readLines(file);
+    const lines = rawLines.filter(l => l.trim().length > 0).length;
+
+    // 超长行：把整个文件压成一行即可绕过行数检查，这里补一道拦截
+    const longest = rawLines.reduce((max, l) => Math.max(max, l.length), 0);
+    if (longest > MAX_LINE_LENGTH) {
+      violations.push({
+        rule: 'max-file-lines',
+        file: r,
+        detail: `存在 ${longest} 字符的超长行（上限 ${MAX_LINE_LENGTH}），请正常换行`,
+      });
+      continue;
+    }
 
     // 未超全局上限就通过。基线只用于「已经超限的历史文件」，
     // 不应对 400 行以内的文件再施加更严格的限制。

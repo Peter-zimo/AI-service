@@ -91,7 +91,8 @@ function getUnansweredTrend(rawDays) {
 // ============ 导出 ============
 
 function exportCsv(rawDays) {
-  const days = Math.min(parseInt(rawDays) || DEFAULT_TREND_DAYS, MAX_DAYS);
+  // 上下界都要收敛：只取上限时传负数会让日期区间反转，导出趋势段为空
+  const days = Math.min(Math.max(parseInt(rawDays) || DEFAULT_TREND_DAYS, 1), MAX_DAYS);
   return exporter.buildExportCsv(repo.snapshot(), days);
 }
 

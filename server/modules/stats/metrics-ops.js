@@ -120,6 +120,8 @@ function buildAgentWorkload(snapshot, days) {
       .filter(m => m.conversation_id === conv.id)
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
+    agent.totalMessages += convMsgs.length;
+
     let firstUser = null;
     for (const msg of convMsgs) {
       if (!firstUser && msg.role === 'user') {

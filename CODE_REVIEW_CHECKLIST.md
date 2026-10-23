@@ -27,27 +27,43 @@
 ```
 ai-customer-service/
 ├── server/                        # 后端源码
-│   ├── index.js                   # 入口 (HTTP + WebSocket + PM2配置)
+│   ├── index.js                   # 进程入口 (.env / 日志接管 / listen / 优雅退出)
+│   ├── app.js                     # Express 装配 (中间件顺序 / 路由挂载 / WebSocket)
 │   ├── middleware/
-│   │   └── auth.js                # Basic Auth + bcrypt 密码验证
-│   ├── routes/
-│   │   ├── chat.js                # 聊天 API (消息/历史/评价/导出)
+│   │   ├── auth.js                # JWT 认证 + 角色校验 + bcrypt 密码验证
+│   │   └── error-handler.js       # 全局错误兜底
+│   ├── routes/                    # 只做 取参 → 调 service → 返回
+│   │   ├── chat.js                # 聊天 API (消息/历史/评价/导出/SSE)
 │   │   ├── config.js              # 系统配置 API (AI/品牌/敏感词)
 │   │   ├── human.js               # 人工客服 API (上下线/转接)
 │   │   ├── knowledge.js           # 知识库 API (CRUD/批量导入/搜索)
 │   │   ├── sensitive.js           # 敏感词 API + 日志管理
-│   │   └── stats.js               # 统计 API (概览/趋势/满意度/导出)
-│   ├── services/
-│   │   ├── ai.js                  # AI 服务 (RAG + DeepSeek/智谱调用)
+│   │   ├── stats.js               # 统计 API (概览/趋势/满意度/导出)
+│   │   ├── actions.js             # 业务执行 API (订单/申诉/退款/复核)
+│   │   ├── health.routes.js       # 健康检查 (公开)
+│   │   └── brand.routes.js        # 品牌配置 (公开)
+│   ├── modules/                   # 业务域，每个域自包含
+│   │   ├── chat/                  #   会话：conversation/message/rating repo +
+│   │   │                          #   message/conversation/export service +
+│   │   │                          #   ai-runner / stream-session / queue / validator
+│   │   ├── knowledge/             #   知识库：repo / service / retrieval / embedding / segment
+│   │   ├── stats/                 #   统计：repo / metrics-core / metrics-ops / export
+│   │   ├── ai/                    #   AI：config / providers / responses / service
+│   │   └── actions/               #   业务执行：repo / service / errors
+│   ├── infra/
+│   │   ├── db/                    # 引擎选择 + sqlite / postgres 实现
+│   │   ├── logger.js              # Winston 日志系统
+│   │   └── metrics.js             # Prometheus 指标
+│   ├── services/                  # 待迁移的旧服务层 (B4 逐步并入 modules/)
 │   │   ├── human.js               # 客服状态管理 (在线/离线/转接)
-│   │   ├── knowledge.js           # 知识库 CRUD + 关键词匹配搜索
 │   │   ├── sensitive.js           # 敏感词过滤 (AES-256-CBC 加密存储)
-│   │   └── sqlite.js              # SQLite 初始化 + 表结构 + JSON迁移 + 自动备份
+│   │   ├── quality.js             # 质量评测
+│   │   ├── unanswered.js          # 未答收集
+│   │   ├── langchain_client.js    # Python 服务客户端
+│   │   └── stream_client.js       # 流式客户端 (双段超时 + 熔断)
 │   ├── utils/
-│   │   ├── config.js              # 配置文件读写
-│   │   └── logger.js              # Winston 日志系统
-│   └── config/
-│       └── auth.json              # 管理员账号 (bcrypt hash)
+│   │   └── config.js              # 配置文件读写
+│   └── config/                    # env 类型化 / 常量 / AI 密钥 / auth.json
 │
 ├── public/                        # 前端页面
 │   ├── index.html                 # 访客端聊天界面 (1102行)
@@ -142,7 +158,7 @@ ai-customer-service/
 | 15 | **P1** | 敏感词误杀业务词 | 移除 支付宝/微信支付/信用卡/扫码/二维码 | `敏感词库` |
 | 16 | **P2** | 调试接口生产可访问 | NODE_ENV=production 返回 404 | `server/index.js` |
 | 17 | **P2** | 无数据库备份 | 每日3点备份 + 保留7天 | `server/infra/db/sqlite.js` |
-| 18 | **P2** | setInterval 无清理 | 改为 start/stopCacheRefresh | `server/modules/chat/conversation.repo.js` |
+| 18 | **P2** | setInterval 无清理 | 改为 start/stopCacheRefresh | `server/modules/stats/stats.repo.js` |
 | 19 | **P2** | /api/stats/trend 无上限 | days 限制 Math.min(1, 365) | `server/routes/stats.js` |
 
 ### 4.2 已知安全限制 (可接受)
