@@ -47,6 +47,10 @@ function enqueue(conversationId, task) {
     if (queues.get(conversationId) === next) queues.delete(conversationId);
   });
 
+  // 调用方通常不 await（要立刻返回 streamId），超时 reject 会变成
+  // unhandledRejection 刷日志，这里挂一个吞掉分支
+  next.catch(() => {});
+
   return next;
 }
 

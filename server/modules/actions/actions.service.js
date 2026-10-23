@@ -12,9 +12,7 @@
 const { v4: uuidv4 } = require('uuid');
 const repo = require('./actions.repo');
 const { ActionError } = require('./errors');
-
-// visitorId 格式白名单（与 chat 模块保持一致）
-const VISITOR_ID_RE = /^v_\d{10,}_[a-z0-9]{4,20}$/;
+const { isValidVisitorId } = require('../../utils/visitor-id');
 
 const LIMITS = {
   ORDER_LIST: 20,
@@ -22,11 +20,6 @@ const LIMITS = {
   ISSUE_MIN: 10,
   TEXT_MAX: 500,
 };
-
-function isValidVisitorId(visitorId) {
-  return !!visitorId && typeof visitorId === 'string' &&
-    visitorId.length <= 64 && VISITOR_ID_RE.test(visitorId);
-}
 
 /** 写审计日志，失败不影响主流程 */
 async function logAction(conversationId, visitorId, action, params, result, status) {

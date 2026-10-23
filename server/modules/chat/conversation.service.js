@@ -98,7 +98,8 @@ async function rate({ conversationId, score, comment, visitorId }) {
   const accessErr = enforceVisitorAccess(conversation, visitorId);
   if (accessErr) return fail(403, { success: false, error: accessErr });
 
-  const validScore = Math.min(5, Math.max(1, parseInt(score, 10) || 3));
+  // 与重构前语义一致：parseInt 不指定进制，非数字回落 3，再夹到 1~5
+  const validScore = Math.min(5, Math.max(1, parseInt(score) || 3));
   await db.ratings.add(uuidv4(), conversationId, validScore, comment || null);
   await db.conversations.close(conversationId, 'rated');
   aiService.clearHistory(conversationId);

@@ -2,24 +2,19 @@
  * 访客身份校验
  *
  * 访客侧接口必须携带 visitorId，且必须与该会话的 visitor_id 一致。
- * 抽成独立文件是因为 create / message / history / rate / close / status /
- * transfer / cancel-queue 八个入口都要用，散着写迟早不一致。
+ * 格式校验复用 utils/visitor-id，避免与 actions / WebSocket 各写一份正则。
  */
 
 'use strict';
 
-/** visitorId 格式白名单：v_<10位以上时间戳>_<4~20位小写字母数字> */
-const VISITOR_ID_RE = /^v_\d{10,}_[a-z0-9]{4,20}$/;
-const MAX_VISITOR_ID_LENGTH = 64;
+const { isValidVisitorId } = require('../../utils/visitor-id');
 
 /**
  * @param {unknown} visitorId
  * @returns {boolean}
  */
 function validateVisitorId(visitorId) {
-  if (!visitorId || typeof visitorId !== 'string') return false;
-  if (visitorId.length > MAX_VISITOR_ID_LENGTH) return false;
-  return VISITOR_ID_RE.test(visitorId);
+  return isValidVisitorId(visitorId);
 }
 
 /**
@@ -36,4 +31,4 @@ function enforceVisitorAccess(conversation, visitorId) {
   return null;
 }
 
-module.exports = { VISITOR_ID_RE, validateVisitorId, enforceVisitorAccess };
+module.exports = { validateVisitorId, enforceVisitorAccess };

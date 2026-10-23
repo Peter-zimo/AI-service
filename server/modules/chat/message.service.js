@@ -36,10 +36,17 @@ async function sendMessage(input) {
   const { conversationId, message, visitorId } = input || {};
 
   // ---- 1. 入参校验 ----
-  if (!message || !message.trim()) {
+  // 先判类型再调 trim()：非字符串直接 trim 会抛异常，最终变成 500
+  if (message === undefined || message === null) {
     return fail(400, { success: false, error: '消息不能为空' });
   }
-  if (typeof message !== 'string' || message.length > MESSAGE.MAX_LENGTH) {
+  if (typeof message !== 'string') {
+    return fail(400, { success: false, error: '消息格式无效' });
+  }
+  if (!message.trim()) {
+    return fail(400, { success: false, error: '消息不能为空' });
+  }
+  if (message.length > MESSAGE.MAX_LENGTH) {
     return fail(400, { success: false, error: `消息长度不能超过${MESSAGE.MAX_LENGTH}字符` });
   }
   if (!conversationId) {

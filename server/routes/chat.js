@@ -9,6 +9,7 @@
 
 const express = require('express');
 const chat = require('../modules/chat');
+const { jwtAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -118,7 +119,8 @@ router.get('/stats', async (req, res) => {
 });
 
 // ============ 导出对话（CSV） ============
-router.get('/export/:format', async (req, res) => {
+// 含全量访客ID与消息内容，必须鉴权；此前漏了 JWT，任何人都能拉走整库会话
+router.get('/export/:format', jwtAuth(['admin', 'agent']), async (req, res) => {
   try {
     if (req.params.format !== 'csv') {
       return res.status(400).json({ success: false, error: '不支持的格式，请使用 csv' });

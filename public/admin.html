@@ -253,7 +253,7 @@
         <div class="page-title" style="margin:0">对话记录</div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-secondary" onclick="loadConversations()">🔄 刷新</button>
-          <button class="btn btn-secondary" onclick="window.open('/api/chat/export/csv','_blank')" style="font-size:13px;">📄 CSV</button>
+          <button class="btn btn-secondary" onclick="downloadWithAuth('/api/chat/export/csv','conversations.csv')" style="font-size:13px;">📄 CSV</button>
         </div>
       </div>
       <div class="table-wrap">
@@ -271,7 +271,7 @@
         <div style="display:flex;gap:8px;">
           <button class="btn btn-secondary" onclick="openImportModal()" style="font-size:13px;">📥 导入</button>
           <button class="btn btn-secondary" onclick="batchAIExpand()" style="font-size:13px;">🤖 AI扩写</button>
-          <button class="btn btn-secondary" onclick="window.open('/api/knowledge/export/csv','_blank')" style="font-size:13px;">📄 CSV导出</button>
+          <button class="btn btn-secondary" onclick="downloadWithAuth('/api/knowledge/export/csv','knowledge.csv')" style="font-size:13px;">📄 CSV导出</button>
           <button class="btn btn-primary" onclick="openAddModal()">＋ 添加问答</button>
         </div>
       </div>
@@ -328,7 +328,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <div class="page-title" style="margin:0">🚫 敏感词管理</div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-secondary" onclick="window.open('/api/sensitive/export/csv','_blank')" style="font-size:13px;">📄 CSV导出</button>
+          <button class="btn btn-secondary" onclick="downloadWithAuth('/api/sensitive/export/csv','sensitive-logs.csv')" style="font-size:13px;">📄 CSV导出</button>
           <button class="btn btn-primary" onclick="openSensitiveModal()">＋ 添加敏感词</button>
         </div>
       </div>
@@ -952,6 +952,33 @@ async function apiFetch(url, options = {}, timeout) {
 /* ===== 显示登录框 ===== */
 function showLoginForm() {
   document.getElementById('login-modal').style.display = 'flex';
+}
+
+/* ===== 带鉴权的文件下载 =====
+   导出接口需要 Authorization 头，window.open 无法携带，
+   改为 fetch + Blob 下载，401 时回到登录框。 */
+async function downloadWithAuth(url, fallbackName) {
+  try {
+    const res = await apiFetch(url, {}, 30000);
+    if (!res.ok) {
+      alert('导出失败（HTTP ' + res.status + '）');
+      return;
+    }
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const matched = disposition.match(/filename=([^;]+)/i);
+    const filename = matched ? matched[1].trim().replace(/["']/g, '') : (fallbackName || 'export.csv');
+
+    const blob = await res.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  } catch (e) {
+    alert('导出失败：' + e.message);
+  }
 }
 
 /* ===== 数据概览 ===== */

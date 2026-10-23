@@ -51,6 +51,7 @@ function endStream(streamId, fullContent, type) {
   if (!session) return;
   session.ended = true;
   session.fullContent = fullContent;
+  session.type = type; // 供迟到重连时还原真实来源（历史遗留：此前未赋值，重连恒为 'ai'）
   session.callbacks.forEach(cb => cb({ type: 'end', data: { fullContent, type } }));
   setTimeout(() => sessions.delete(streamId), END_RETENTION_MS);
 }
@@ -85,9 +86,7 @@ function attachSse(res, streamId, req) {
     res.write(`event: token\ndata: ${JSON.stringify(token)}\n\n`);
   }
 
-  // 已结束：直接补一个 end 事件收尾
-  // 注：session.type 历史遗留未赋值，故此处恒为 'ai'。属已知问题，
-  //     为保持重构零行为变化暂不修正，待后续单独处理。
+  // 已结束：直接补一个 end 事件收尾，type 用记录下来的真实来源
   if (session.ended) {
     res.write(`event: end\ndata: ${JSON.stringify({
       fullContent: session.fullContent,

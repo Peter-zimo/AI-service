@@ -23,6 +23,7 @@ const metrics = require('./infra/metrics');
 const { helmetOptions } = require('./utils/security-headers');
 const { isAllowedOrigin } = require('./utils/cors');
 const { env } = require('./config');
+const { isValidVisitorId } = require('./utils/visitor-id');
 const { errorHandler } = require('./middleware/error-handler');
 
 // ============ 路由 ============
@@ -86,9 +87,6 @@ function internalServiceAuth(req, res, next) {
 
 // ============ WebSocket ============
 
-/** visitorId 格式白名单（与 chat 路由保持一致） */
-const VISITOR_ID_RE = /^v_\d{10,}_[a-z0-9]{4,20}$/;
-
 const WS_HEARTBEAT_INTERVAL = 30 * 1000;
 
 function attachWebSocket(server) {
@@ -150,7 +148,7 @@ function attachWebSocket(server) {
 
     } else if (type === 'user' && id) {
       // 访客端必须验证 visitorId 格式与归属
-      if (!visitorId || !VISITOR_ID_RE.test(visitorId)) {
+      if (!visitorId || !isValidVisitorId(visitorId)) {
         logger.warn(`拒绝连接: visitorId格式无效=${visitorId}`);
         ws.send(JSON.stringify({ type: 'error', code: 'INVALID_VISITOR_ID', message: '身份验证失败' }));
         ws.close(1008, 'Invalid visitorId');
@@ -257,7 +255,11 @@ function createApp() {
     const start = Date.now();
     res.on('finish', () => {
       const duration = Date.now() - start;
-      const route = req.route?.path || req.path || 'unknown';
+      // 用「挂载前缀 + 路由模式」拼出稳定的指标标签。
+      // 只取 req.route.path 时，子路由恒为 '/'，会把所有端点塌缩成一个标签。
+      const routePattern = req.route?.path || '';
+      const route = (req.baseUrl || '') + (routePattern === '/' ? '' : routePattern) ||
+        req.path || 'unknown';
       metrics.inc('http_requests_total', [req.method, route, String(res.statusCode)]);
       metrics.observe('http_request_duration_ms', duration, [req.method, route]);
     });

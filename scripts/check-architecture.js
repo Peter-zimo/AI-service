@@ -149,18 +149,16 @@ function checkServiceLayer(files) {
   return violations;
 }
 
-/** 规则 4：模块之间只走 index.js */
+/** 规则 4：模块之间只走 index.js（同时约束 modules 内部与 routes/app 等外部调用方） */
 function checkModuleBoundary(files) {
   const violations = [];
   for (const file of files) {
     const r = rel(file);
-    if (!r.startsWith('server/modules/')) continue;
-
-    const parts = r.split('/'); // server modules <domain> ...
-    if (parts.length < 4) continue;
-    const ownDomain = parts[2];
-
     const src = stripComments(fs.readFileSync(file, 'utf8'));
+
+    // 位于 modules/<domain>/ 下的文件才有"自己所属的域"
+    const ownDomain = r.startsWith('server/modules/') ? r.split('/')[2] : null;
+
     const requireRe = /require\(['"](\.[^'"]+)['"]\)/g;
     let m;
     while ((m = requireRe.exec(src)) !== null) {
@@ -176,10 +174,11 @@ function checkModuleBoundary(files) {
       const rest = tParts.slice(3).filter(Boolean);
       const isIndex = rest.length === 0 || (rest.length === 1 && rest[0] === 'index');
       if (!isIndex) {
+        const from = ownDomain ? `模块 ${ownDomain}` : '模块外部';
         violations.push({
           rule: 'module-boundary',
           file: r,
-          detail: `跨模块深引用 ${spec}，应改为 require('../${targetDomain}') 走对外出口`,
+          detail: `${from}深引用 ${spec}，应改为 require('../${targetDomain}') 走对外出口`,
         });
       }
     }
@@ -187,16 +186,22 @@ function checkModuleBoundary(files) {
   return violations;
 }
 
-/** 规则 5：单文件行数上限（存量豁免可设基线，只拦增长） */
+/** 规则 5：单文件行数上限（存量超限文件可设基线，只拦增长） */
 function checkFileSize(files, allowlist) {
   const violations = [];
   const warnings = [];
+
   for (const file of files) {
     const r = rel(file);
     const lines = readLines(file).filter(l => l.trim().length > 0).length;
+
+    // 未超全局上限就通过。基线只用于「已经超限的历史文件」，
+    // 不应对 400 行以内的文件再施加更严格的限制。
+    if (lines <= MAX_LINES) continue;
+
     const baseline = allowlist.files[r];
 
-    if (baseline) {
+    if (baseline && typeof baseline.maxLines === 'number') {
       if (lines > baseline.maxLines) {
         violations.push({
           rule: 'max-file-lines',
@@ -209,13 +214,11 @@ function checkFileSize(files, allowlist) {
       continue;
     }
 
-    if (lines > MAX_LINES) {
-      violations.push({
-        rule: 'max-file-lines',
-        file: r,
-        detail: `${lines} 行超过上限 ${MAX_LINES} 行，请按职责拆分`,
-      });
-    }
+    violations.push({
+      rule: 'max-file-lines',
+      file: r,
+      detail: `${lines} 行超过上限 ${MAX_LINES} 行，请按职责拆分`,
+    });
   }
   return { violations, warnings };
 }
