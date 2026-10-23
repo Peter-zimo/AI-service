@@ -20,32 +20,38 @@ const KEYWORD_KEYS = ['关键词', 'keywords'];
 
 function pick(row, keys) {
   for (const key of keys) {
-    if (row[key] !== undefined && row[key] !== null) return row[key];
+    const value = row[key];
+    // 空串要继续尝试下一个键（与旧实现的 `a || b` 语义一致）
+    if (value) return value;
   }
   return '';
 }
 
 /**
- * 从上传文件解析出原始行
+ * 从上传文件解析出原始行（解析后立即删除临时文件）
  * @param {string} filePath 临时文件路径
  * @param {string} originalName 原始文件名（用于判断扩展名）
  * @returns {Array<object>}
  */
 function parseFile(filePath, originalName) {
-  const ext = path.extname(originalName).toLowerCase();
+  try {
+    const ext = path.extname(originalName).toLowerCase();
 
-  if (ext === '.csv') {
-    return parseCsv(fs.readFileSync(filePath, 'utf-8'));
-  }
-  if (ext === '.json') {
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    return Array.isArray(parsed) ? parsed : (parsed.knowledge || []);
-  }
+    if (ext === '.csv') {
+      return parseCsv(fs.readFileSync(filePath, 'utf-8'));
+    }
+    if (ext === '.json') {
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      return Array.isArray(parsed) ? parsed : (parsed.knowledge || []);
+    }
 
-  removeTemp(filePath, '知识库导入');
-  const err = new Error('仅支持 csv/json 格式');
-  err.unsupported = true;
-  throw err;
+    const err = new Error('仅支持 csv/json 格式');
+    err.unsupported = true;
+    throw err;
+  } finally {
+    // 无论成功失败都要清掉，否则 uploads/ 会持续堆积
+    removeTemp(filePath, '知识库导入');
+  }
 }
 
 /**
@@ -116,7 +122,8 @@ function collectBatchItems(bodyItems, filePath, originalName) {
     return items;
   }
 
-  if (bodyItems === undefined || bodyItems === null) return null;
+  // 空串视为「未提供」，否则 JSON.parse('') 会抛错变成 500
+  if (bodyItems === undefined || bodyItems === null || bodyItems === '') return null;
 
   return typeof bodyItems === 'string' ? JSON.parse(bodyItems) : bodyItems;
 }

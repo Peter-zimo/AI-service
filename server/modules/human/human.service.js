@@ -206,6 +206,20 @@ function getAgentByConversation(conversationId) {
   return registry.findByConversation(conversationId);
 }
 
+/**
+ * 校验「该坐席当前正在处理这个会话」
+ * 把这段判断收在模块内，路由不必再摸 currentConversation 字段。
+ * @returns {{ok: true, agent: object} | {ok: false, code: number, error: string}}
+ */
+function checkHandling(agentId, conversationId) {
+  const agent = registry.getView(agentId);
+  if (!agent) return { ok: false, code: 404, error: '客服不存在' };
+  if (agent.currentConversation !== conversationId) {
+    return { ok: false, code: 403, error: '您没有处理该会话' };
+  }
+  return { ok: true, agent };
+}
+
 // ============ WebSocket ============
 
 function registerAgentSocket(agentId, ws) {
@@ -255,6 +269,7 @@ module.exports = {
   getAgentById,
   getAgentView,
   getAgentByConversation,
+  checkHandling,
   registerAgentSocket,
   registerUserSocket,
   removeSocket,

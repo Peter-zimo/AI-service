@@ -131,13 +131,11 @@ router.post('/send-message', async (req, res) => {
     }
     if (!requireAgentAccess(req, res, agentId)) return;
 
-    const agent = humanService.getAgentView(agentId);
-    if (!agent) {
-      return res.status(404).json({ success: false, error: '客服不存在' });
-    }
-    if (agent.currentConversation !== conversationId) {
-      return res.status(403).json({ success: false, error: '您没有处理该会话' });
-    }
+    const handling = humanService.checkHandling(agentId, conversationId);
+        if (!handling.ok) {
+          return res.status(handling.code).json({ success: false, error: handling.error });
+        }
+        const agent = handling.agent;
 
     // 保存消息
     await chat.addAgentMessage(conversationId, message);
@@ -167,13 +165,11 @@ router.post('/end-conversation', async (req, res) => {
     }
     if (!requireAgentAccess(req, res, agentId)) return;
 
-    const agent = humanService.getAgentView(agentId);
-    if (!agent) {
-      return res.status(404).json({ success: false, error: '客服不存在' });
-    }
-    if (agent.currentConversation !== conversationId) {
-      return res.status(403).json({ success: false, error: '您没有处理该会话' });
-    }
+    const handling = humanService.checkHandling(agentId, conversationId);
+        if (!handling.ok) {
+          return res.status(handling.code).json({ success: false, error: handling.error });
+        }
+        const agent = handling.agent;
 
     // 结束会话
     const endedId = humanService.endConversation(agentId);

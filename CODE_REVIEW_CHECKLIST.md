@@ -54,13 +54,19 @@ ai-customer-service/
 │   │   ├── db/                    # 引擎选择 + sqlite / postgres 实现
 │   │   ├── logger.js              # Winston 日志系统
 │   │   └── metrics.js             # Prometheus 指标
-│   ├── services/                  # 待迁移的旧服务层 (B4 逐步并入 modules/)
-│   │   ├── human.js               # 客服状态管理 (在线/离线/转接)
-│   │   ├── sensitive.js           # 敏感词过滤 (AES-256-CBC 加密存储)
-│   │   ├── quality.js             # 质量评测
-│   │   ├── unanswered.js          # 未答收集
-│   │   ├── langchain_client.js    # Python 服务客户端
-│   │   └── stream_client.js       # 流式客户端 (双段超时 + 熔断)
+│   ├── modules/                   # 业务域（每个域自包含，四轮重构后 services/ 已清空）
+│   │   ├── chat/                  #   会话：conversation/message/rating repo + service + ai-runner
+│   │   ├── knowledge/             #   知识库：repo / service / retrieval / embedding / import / export
+│   │   ├── stats/                 #   统计：repo / metrics-core / metrics-ops / export
+│   │   ├── ai/                    #   AI：config / providers / responses / service
+│   │   ├── human/                 #   人工客服：agent.registry / queue / sockets / service
+│   │   ├── actions/               #   业务执行：订单 / 申诉 / 退款 / 复核
+│   │   ├── quality/               #   质量评测审计（独立 quality.db）
+│   │   ├── unanswered/            #   未答收集与知识库闭环
+│   │   └── sensitive/             #   敏感词过滤（AES-256-CBC 加密存储）
+│   ├── infra/
+│   │   ├── db/                    #   引擎选择 + sqlite / postgres / secondary
+│   │   └── clients/               #   Python 服务客户端 / 流式客户端（双段超时 + 熔断）
 │   ├── utils/
 │   │   └── config.js              # 配置文件读写
 │   └── config/                    # env 类型化 / 常量 / AI 密钥 / auth.json

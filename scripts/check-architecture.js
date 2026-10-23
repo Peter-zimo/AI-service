@@ -40,7 +40,7 @@ function walk(dir, acc = []) {
     if (entry.name === 'node_modules' || entry.name === '.git') continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full, acc);
-    else if (entry.name.endsWith('.js')) acc.push(full);
+    else if (entry.name.endsWith('.js') || entry.name.endsWith('.cjs')) acc.push(full);
   }
   return acc;
 }
@@ -114,7 +114,8 @@ function checkSqlLocation(files) {
   const violations = [];
   for (const file of files) {
     const r = rel(file);
-    const isRepo = r.endsWith('.repo.js');
+    // 后缀要配合位置：任意目录建个 xxx.repo.js 不该自动获得 SQL 许可
+    const isRepo = r.startsWith('server/modules/') && r.endsWith('.repo.js');
     const isDbLayer = r.startsWith('server/infra/db/');
     if (isRepo || isDbLayer) continue;
 
@@ -123,7 +124,7 @@ function checkSqlLocation(files) {
       violations.push({
         rule: 'sql-only-in-repo',
         file: r,
-        detail: 'SQL 只允许出现在 *.repo.js 或 server/infra/db/ 下',
+        detail: 'SQL 只允许出现在 server/modules/**/*.repo.js 或 server/infra/db/ 下',
       });
     }
   }
