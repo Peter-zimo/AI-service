@@ -11,7 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const logger = require('./utils/logger');
+const logger = require('./infra/logger');
 
 // ============ 1. 日志接管（必须最先，后续所有 console 都走 winston） ============
 

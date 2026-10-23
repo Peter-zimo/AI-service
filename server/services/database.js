@@ -3,7 +3,7 @@
  * 使用 better-sqlite3，WAL 模式支持并发
  */
 
-const db = require('./sqlite');
+const db = require('../infra/db');
 const { v4: uuidv4 } = require('uuid');
 const {
   CONVERSATION_STATUS,

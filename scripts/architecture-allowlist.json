@@ -1,52 +1,30 @@
 {
   "_comment": "架构检查的存量豁免清单。只支持「按文件 + 按规则」豁免，刻意不提供规则级全局豁免。每完成一批重构就删掉对应条目，只减不增。",
   "_updatedAt": "2026-10-23",
+  "_history": "B1 建清单（18 条）→ B2 收敛到 5 条：chat/actions/sqlite/pg 已彻底达标，其余随行数降到 400 以内自动解除。",
   "files": {
-    "server/routes/chat.js": {
-      "maxLines": 727,
-      "reason": "B2 拆 modules/chat（含 /message 主链路）",
-      "exemptRules": ["routes-no-data-layer", "sql-only-in-repo"]
+    "server/routes/stats.js": {
+      "maxLines": 638,
+      "reason": "B3 拆 modules/stats"
     },
-    "server/routes/actions.js": {
-      "maxLines": 208,
-      "reason": "B2 拆 modules/actions",
-      "exemptRules": ["routes-no-data-layer", "sql-only-in-repo"]
+    "server/services/ai.js": {
+      "maxLines": 494,
+      "reason": "B3 拆 modules/ai"
     },
-    "server/routes/stats.js": { "maxLines": 733, "reason": "B2 拆 modules/stats" },
-    "server/routes/knowledge.js": { "maxLines": 420, "reason": "B2 拆 modules/knowledge 路由层" },
-    "server/routes/config.js": { "maxLines": 252, "reason": "B2 拆 modules/config" },
-    "server/routes/human.js": { "maxLines": 226, "reason": "B2 拆 modules/human 路由层" },
-    "server/services/ai.js": { "maxLines": 557, "reason": "B2 拆 modules/ai" },
-    "server/services/human.js": { "maxLines": 451, "reason": "B2 拆 modules/human" },
     "server/services/database.js": {
-      "maxLines": 344,
-      "reason": "B2 按领域拆 repo",
-      "exemptRules": ["sql-only-in-repo"]
-    },
-    "server/services/sqlite.js": {
-      "maxLines": 346,
-      "reason": "B2 迁 infra/db",
-      "exemptRules": ["sql-only-in-repo"]
-    },
-    "server/services/pg.js": {
-      "maxLines": 210,
-      "reason": "B2 迁 infra/db",
+      "maxLines": 287,
+      "reason": "B3 按领域拆 repo",
       "exemptRules": ["sql-only-in-repo"]
     },
     "server/services/quality.js": {
-      "maxLines": 101,
-      "reason": "B2 拆 modules/quality",
+      "maxLines": 90,
+      "reason": "B3 拆 modules/quality",
       "exemptRules": ["sql-only-in-repo"]
     },
     "server/services/unanswered.js": {
-      "maxLines": 141,
-      "reason": "B2 拆 modules/unanswered",
+      "maxLines": 124,
+      "reason": "B3 拆 modules/unanswered",
       "exemptRules": ["sql-only-in-repo"]
-    },
-    "server/services/sensitive.js": { "maxLines": 231, "reason": "B2 拆 modules/sensitive" },
-    "server/services/langchain_client.js": { "maxLines": 148, "reason": "B2 拆 modules/ai" },
-    "server/services/stream_client.js": { "maxLines": 123, "reason": "B2 拆 modules/ai" },
-    "server/middleware/auth.js": { "maxLines": 252, "reason": "B2 拆 middleware" },
-    "server/utils/config.js": { "maxLines": 177, "reason": "B2 迁 modules/config" }
+    }
   }
 }

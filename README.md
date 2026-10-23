@@ -102,9 +102,14 @@ AI智能客服V3（node.js版）/
 │   ├── routes/              # API 路由（只做 取参 → 调 service → 返回）
 │   ├── modules/             # 业务域，每个域自包含
 │   │   ├── knowledge/       #   知识库：repo / service / retrieval / embedding / segment
-│   │   └── chat/            #   会话：repo / service
+│   │   ├── chat/            #   会话：repo / service / message / ai-runner / stream-session / queue
+│   │   └── actions/         #   业务执行：订单查询 / 申诉 / 退款 / 人工复核
+│   ├── infra/               # 基础设施
+│   │   ├── db/              #   引擎选择 + sqlite / postgres 实现
+│   │   ├── logger.js        #   winston 日志
+│   │   └── metrics.js       #   Prometheus 指标
 │   ├── middleware/          # JWT 认证、限流、安全头、全局错误处理
-│   ├── services/            # 待迁移的旧服务层（B2 批次逐步并入 modules/）
+│   ├── services/            # 待迁移的旧服务层（B3 批次逐步并入 modules/）
 │   └── data/                # SQLite 数据库与种子数据
 ├── scripts/                 # 运维与质量脚本
 │   └── check-architecture.js# 架构护栏（五条硬约束，已接入 npm test）

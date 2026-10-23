@@ -1,38 +1,15 @@
 /**
- * SQLite 核心数据库模块
- * 使用 better-sqlite3（WAL 模式支持并发读写）
- * 当 DB_TYPE=postgres 时自动切换到 PostgreSQL
+ * SQLite 引擎实现
+ *
+ * 只负责 SQLite 本身：连接、表结构、迁移、备份。
+ * 引擎选择在 infra/db/index.js，PG 适配在 postgres-adapter.js。
  */
-
-// ===== 双引擎切换 =====
-if (process.env.DB_TYPE === 'postgres') {
-  const pg = require('./pg');
-  // 异步适配：包装 pg.query 为类 better-sqlite3 同步接口
-  // 注意：调用方需在 async 上下文中使用 await db.xxx()
-  const db = {
-    _pg: true,
-    prepare: (sql) => ({
-      all: (...params) => pg.query(sql, params),
-      get: (...params) => pg.queryOne(sql, params),
-      run: (...params) => pg.execute(sql, params),
-    }),
-    exec: (sql) => pg.execute(sql),
-    transaction: (fn) => pg.transaction(fn),
-    pragma: () => {},              // PG 不需要
-    backup: () => {},              // PG 用 pg_dump
-    healthCheck: () => pg.healthCheck(),
-  };
-  console.log('[DB] 使用 PostgreSQL 引擎');
-  module.exports = db;
-  // 表结构由 pg.js 首次查询前自动 ensureSchemaReady（解决启动竞态）
-  return;
-}
 
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const dataDir = path.join(__dirname, '../data');
+const dataDir = path.join(__dirname, '../../data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
@@ -307,7 +284,7 @@ function seedOrders() {
 seedOrders();
 
 // ===== 数据库自动备份（每日凌晨3点，保留最近7天）=====
-const backupDir = path.join(__dirname, '../data/backups');
+const backupDir = path.join(__dirname, '../../data/backups');
 if (!fs.existsSync(backupDir)) {
   fs.mkdirSync(backupDir, { recursive: true });
 }

@@ -84,7 +84,7 @@ async function main() {
     const report = await runEvaluation();
     console.log(`Quality evaluation ${report.runId}: total=${report.total} passed=${report.passed} failed=${report.failed}`);
   } finally {
-    const db = require('../server/services/sqlite');
+    const db = require('../server/infra/db');
     db.close();
     fs.rmSync(dbPath, { force: true });
   }

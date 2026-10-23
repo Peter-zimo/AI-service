@@ -18,8 +18,8 @@ const http = require('http');
 const crypto = require('crypto');
 const WebSocket = require('ws');
 
-const logger = require('./utils/logger');
-const metrics = require('./utils/metrics');
+const logger = require('./infra/logger');
+const metrics = require('./infra/metrics');
 const { helmetOptions } = require('./utils/security-headers');
 const { isAllowedOrigin } = require('./utils/cors');
 const { env } = require('./config');
@@ -38,8 +38,11 @@ const actionsRoutes = require('./routes/actions');
 const qualityRoutes = require('./routes/quality');
 const authRoutes = require('./routes/auth');
 const debugRoutes = require('./routes/debug.routes');
+const healthRoutes = require('./routes/health.routes');
+const brandRoutes = require('./routes/brand.routes');
 
 const humanService = require('./services/human');
+const chatService = require('./modules/chat');
 const { jwtAuth, changePassword, verifyWebSocketAgentToken } = require('./middleware/auth');
 
 // ============ 限流策略 ============
@@ -154,8 +157,7 @@ function attachWebSocket(server) {
         return;
       }
 
-      const db = require('./services/database');
-      const conversation = await db.conversations.getById(id);
+      const conversation = await chatService.getConversationById(id);
 
       if (!conversation) {
         logger.warn(`拒绝连接: 会话不存在 id=${id}`);
@@ -262,27 +264,13 @@ function createApp() {
     next();
   });
 
-  app.get('/api/health', async (req, res) => {
-    let langchain = { reachable: false, error: 'LangChain 服务连接失败' };
-    try {
-      const langchainClient = require('./services/langchain_client');
-      const health = await Promise.race([
-        langchainClient.health(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('LangChain 服务超时')), 3000)),
-      ]);
-      langchain = { reachable: true, embedding: health.embedding };
-    } catch (e) {
-      langchain = { reachable: false, error: e.message };
-    }
-
-    res.json({ status: 'ok', time: new Date().toISOString(), langchain });
-  });
-
   app.get('/api/metrics', jwtAuth(['admin']), async (req, res) => {
     res.setHeader('Content-Type', 'text/plain; version=0.0.4');
     res.send(metrics.toPrometheusText());
   });
+
+  // 健康检查（公开）
+  app.use('/api/health', healthRoutes);
 
   // 内部服务调用（Python AI 服务拉知识库）
   app.get('/api/internal/knowledge', internalServiceAuth, async (req, res) => {
@@ -294,9 +282,9 @@ function createApp() {
   app.use('/api/auth/login', limiters.login);
   app.use('/api/auth', authRoutes);
 
-  // ---------- 调试端点 ----------
+  // ---------- 调试端点（仅管理员，且仅非生产环境） ----------
   if (!env.isProduction) {
-    app.use('/api/debug', jwtAuth(), debugRoutes);
+    app.use('/api/debug', jwtAuth(['admin']), debugRoutes);
   } else {
     app.get('/api/debug/{*splat}', async (req, res) => {
       res.status(404).json({ success: false, error: '该接口在生产环境已禁用' });
@@ -313,15 +301,8 @@ function createApp() {
   app.use('/api/chat', chatRoutes);
   app.use('/api/actions', limiters.chat, actionsRoutes);
 
-  app.get('/api/config/brand', async (req, res) => {
-    const { readBrandConfig } = require('./utils/config');
-    try {
-      const config = await readBrandConfig();
-      res.json({ success: true, data: config });
-    } catch (err) {
-      res.status(500).json({ success: false, message: '获取品牌配置失败' });
-    }
-  });
+  // 品牌配置（公开，访客端加载皮肤）；必须挂在 /api/config 管理路由之前
+  app.use('/api/config/brand', brandRoutes);
 
   // ---------- 管理 API ----------
   app.use('/api/knowledge', limiters.admin, jwtAuth(['admin', 'agent']), knowledgeRoutes);

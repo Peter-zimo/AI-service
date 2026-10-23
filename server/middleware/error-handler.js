@@ -6,7 +6,7 @@
 
 'use strict';
 
-const logger = require('../utils/logger');
+const logger = require('../infra/logger');
 
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { getDatabasePassword } = require('../server/services/pg');
+const { getDatabasePassword } = require('../server/infra/db/postgres');
 
 test('PostgreSQL requires an explicit password in production', () => {
   assert.throws(

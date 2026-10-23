@@ -9,7 +9,7 @@ const auditPath = path.join(os.tmpdir(), `quality-audit-${process.pid}-${Date.no
 process.env.SQLITE_DB_PATH = dbPath;
 process.env.QUALITY_AUDIT_DB_PATH = auditPath;
 process.env.DISABLE_DB_BACKUP = 'true';
-const db = require('../server/services/sqlite');
+const db = require('../server/infra/db');
 const quality = require('../server/services/quality');
 
 test.after(() => {

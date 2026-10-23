@@ -9,7 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const db = require('../../services/sqlite');
+const db = require('../../infra/db');
 const { chineseSegment } = require('./segment');
 const { defaultKnowledge } = require('./defaults');
 

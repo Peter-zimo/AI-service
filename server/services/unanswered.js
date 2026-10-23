@@ -2,7 +2,7 @@
  * 未匹配查询服务（知识库反馈闭环）
  * 记录 AI 未能通过知识库回答的查询，支持运营补充知识
  */
-const db = require('./sqlite');
+const db = require('../infra/db');
 const { v4: uuidv4 } = require('uuid');
 
 class UnansweredService {

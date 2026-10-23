@@ -6,7 +6,7 @@
 
 'use strict';
 
-const db = require('../../services/sqlite');
+const db = require('../../infra/db');
 
 /**
  * 按创建时间倒序取会话列表，附带最后一条消息。
@@ -30,4 +30,20 @@ async function listRecentConversations(limit) {
   `).all(limit);
 }
 
-module.exports = { listRecentConversations };
+/** 全部评价（导出用） */
+async function listAllRatings() {
+  return db.prepare('SELECT * FROM ratings').all();
+}
+
+/** 某会话的全部消息，按时间正序（导出用） */
+async function listMessagesByConversation(conversationId) {
+  return db.prepare(
+    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'
+  ).all(conversationId);
+}
+
+module.exports = {
+  listRecentConversations,
+  listAllRatings,
+  listMessagesByConversation,
+};
