@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const aiService = require('../services/ai');
+const aiService = require('../modules/ai');
 const { readAIConfig, saveAIConfig, readBrandConfig, saveBrandConfig, DEFAULT_BRAND, DEFAULT_CONFIG } = require('../utils/config');
 
 const PLACEHOLDER_KEYS = ['your_deepseek_api_key_here', 'your_zhipu_api_key_here'];

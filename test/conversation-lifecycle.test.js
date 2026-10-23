@@ -8,28 +8,37 @@ const dbPath = path.join(os.tmpdir(), `conversation-lifecycle-${process.pid}-${D
 process.env.SQLITE_DB_PATH = dbPath;
 process.env.DISABLE_DB_BACKUP = 'true';
 
-const db = require('../server/services/database');
+// 会话数据访问已从 services/database 迁到 modules/chat/conversation.repo
+const conversations = require('../server/modules/chat/conversation.repo');
+const { CONVERSATION_STATUS } = require('../server/config/constants');
+const db = require('../server/infra/db');
 
 test.after(() => {
-  db.stopCacheRefresh();
-  db._db.close();
+  // 快照缓存与会话超时检查都带定时器，停掉避免进程挂住
+  try { require('../server/modules/stats').stopCache(); } catch (_) { /* 未加载则忽略 */ }
+  try { require('../server/modules/chat/conversation.scheduler').stop(); } catch (_) { /* 未加载则忽略 */ }
+  db.close();
   fs.rmSync(dbPath, { force: true });
 });
 
 test('creating a new session closes the previous session for that visitor', async () => {
-  await db.conversations.create('conv-one', 'v_1234567890_abcd', '访客');
-  await db.conversations.create('conv-two', 'v_1234567890_abcd', '访客');
-  const first = await db.conversations.getById('conv-one');
-  const second = await db.conversations.getById('conv-two');
-  assert.equal(first.status, db.conversations.STATUS.CLOSED);
-  assert.equal(second.status, db.conversations.STATUS.ACTIVE);
+  await conversations.create('conv-one', 'v_1234567890_abcd', '访客');
+  await conversations.create('conv-two', 'v_1234567890_abcd', '访客');
+
+  const first = await conversations.getById('conv-one');
+  const second = await conversations.getById('conv-two');
+
+  assert.equal(first.status, CONVERSATION_STATUS.CLOSED);
+  assert.equal(second.status, CONVERSATION_STATUS.ACTIVE);
 });
 
 test('idle sessions reactivate on a message and can be closed', async () => {
-  await db.conversations.setIdle('conv-two');
-  assert.equal((await db.conversations.getById('conv-two')).status, db.conversations.STATUS.IDLE);
-  assert.equal(await db.conversations.updateLastMessage('conv-two'), true);
-  assert.equal((await db.conversations.getById('conv-two')).status, db.conversations.STATUS.ACTIVE);
-  assert.equal(await db.conversations.close('conv-two', 'test'), true);
-  assert.equal((await db.conversations.getById('conv-two')).status, db.conversations.STATUS.CLOSED);
+  await conversations.setIdle('conv-two');
+  assert.equal((await conversations.getById('conv-two')).status, CONVERSATION_STATUS.IDLE);
+
+  assert.equal(await conversations.updateLastMessage('conv-two'), true);
+  assert.equal((await conversations.getById('conv-two')).status, CONVERSATION_STATUS.ACTIVE);
+
+  assert.equal(await conversations.close('conv-two', 'test'), true);
+  assert.equal((await conversations.getById('conv-two')).status, CONVERSATION_STATUS.CLOSED);
 });

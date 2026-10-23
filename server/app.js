@@ -320,11 +320,11 @@ function createApp() {
   app.use('/api/unanswered', limiters.admin, jwtAuth(['admin', 'agent']), unansweredRoutes);
 
   // ---------- 基础设施 ----------
-  // 触发数据库初始化（建表 / 缓存刷新定时器）
-  const db = require('./services/database');
+  // 数据库建表在 infra/db 加载时完成；chat 模块加载时会启动会话超时检查
+  require('./modules/chat');
 
-  // AI 服务全局引用（供配置同步回调使用）
-  global.aiService = require('./services/ai');
+  // AI 服务全局引用（供配置同步回调使用；utils/config.js 仍依赖它，B4 收口）
+  global.aiService = require('./modules/ai');
 
   // ---------- WebSocket ----------
   const wss = attachWebSocket(server);
@@ -332,7 +332,7 @@ function createApp() {
   // ---------- 错误兜底（必须最后） ----------
   app.use(errorHandler);
 
-  return { app, server, wss, db };
+  return { app, server, wss };
 }
 
 module.exports = { createApp };

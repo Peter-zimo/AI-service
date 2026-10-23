@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const humanService = require('../services/human');
-const db = require('../services/database');
+const chat = require('../modules/chat');
 const { getJwtSecret, sign, canManageAgent } = require('../middleware/auth');
 const { canAccessAgentConversation } = require('../utils/access-control');
 
@@ -140,7 +140,7 @@ router.post('/send-message', async (req, res) => {
     }
 
     // 保存消息
-    await db.messages.add(uuidv4(), conversationId, 'agent', message);
+    await chat.addAgentMessage(conversationId, message);
 
     // 通过WebSocket发送给用户
     const sent = humanService.sendToUser(conversationId, {
@@ -179,7 +179,7 @@ router.post('/end-conversation', async (req, res) => {
     const endedId = humanService.endConversation(agentId);
     if (endedId) {
       // 更新会话状态
-      await db.conversations.close(endedId, 'agent_ended');
+      await chat.closeByAgent(endedId);
       
       // 通知用户会话已结束
       humanService.sendToUser(conversationId, {
@@ -200,11 +200,11 @@ router.post('/end-conversation', async (req, res) => {
 router.get('/history/:conversationId', async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const conversation = await db.conversations.getById(conversationId);
+    const conversation = await chat.getConversationById(conversationId);
     if (!canAccessAgentConversation(req.auth, conversation)) {
       return res.status(403).json({ success: false, error: '无权访问该会话' });
     }
-    const messages = await db.messages.getByConversation(conversationId);
+    const messages = await chat.getMessages(conversationId);
     
     res.json({
       success: true,

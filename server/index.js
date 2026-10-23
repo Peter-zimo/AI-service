@@ -66,7 +66,7 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-const { server, db } = createApp();
+const { server } = createApp();
 
 server.listen(env.port, () => {
   logger.info(`
@@ -106,7 +106,7 @@ process.on('uncaughtException', (err) => {
 process.on('SIGTERM', () => {
   logger.info('收到SIGTERM，正在关闭...');
   server.close(() => {
-    if (db && db.stopCacheRefresh) db.stopCacheRefresh();
+    try { require('./modules/stats').stopCache(); } catch (_) { /* 忽略 */ }
     logger.info('服务器已关闭');
     process.exit(0);
   });

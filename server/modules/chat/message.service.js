@@ -15,10 +15,12 @@
 'use strict';
 
 const { v4: uuidv4 } = require('uuid');
-const db = require('../../services/database');
+const conversationRepo = require('./conversation.repo');
+const messageRepo = require('./message.repo');
 const sensitiveService = require('../../services/sensitive');
 const humanService = require('../../services/human');
 const { CONVERSATION_STATUS, CONVERSATION_MODE, MESSAGE } = require('../../config/constants');
+const stats = require('../stats');
 const { enforceVisitorAccess } = require('./validator');
 const streamSession = require('./stream-session');
 const queue = require('./queue');
@@ -54,7 +56,7 @@ async function sendMessage(input) {
   }
 
   // ---- 2. 会话状态与归属 ----
-  const conversation = await db.conversations.getById(conversationId);
+  const conversation = await conversationRepo.getById(conversationId);
   if (!conversation) {
     return fail(400, { success: false, error: '会话不存在' });
   }
@@ -86,11 +88,11 @@ async function sendMessage(input) {
   }
 
   // ---- 4. 落库 ----
-  await db.conversations.updateLastMessage(conversationId);
-  await db.messages.add(uuidv4(), conversationId, 'user', trimmedMessage);
-  await db.stats.incrementMessages();
+  await conversationRepo.updateLastMessage(conversationId);
+  await messageRepo.add(uuidv4(), conversationId, 'user', trimmedMessage);
+  await stats.incrementMessages();
 
-  const updatedConversation = await db.conversations.getById(conversationId);
+  const updatedConversation = await conversationRepo.getById(conversationId);
 
   // ---- 5a. 人工模式：转发给客服，不立即返回内容 ----
   if (updatedConversation.mode === CONVERSATION_MODE.HUMAN) {

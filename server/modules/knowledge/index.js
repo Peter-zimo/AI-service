@@ -18,7 +18,7 @@
 const repo = require('./knowledge.repo');
 const embedding = require('./embedding');
 const { KnowledgeService } = require('./knowledge.service');
-const { createRetrieval, buildFtsMatchExpression, rrfFusion } = require('./retrieval');
+const { buildFtsMatchExpression, rrfFusion } = require('./retrieval');
 const { chineseSegment } = require('./segment');
 const { extractKeywords } = require('./keywords');
 
@@ -43,9 +43,3 @@ knowledgeService._test = {
 };
 
 module.exports = knowledgeService;
-
-// 具名导出，供需要自行实例化或单独测试的场景使用
-module.exports.KnowledgeService = KnowledgeService;
-module.exports.createRetrieval = createRetrieval;
-module.exports.embedding = embedding;
-module.exports.repo = repo;

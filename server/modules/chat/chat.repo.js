@@ -1,7 +1,9 @@
 /**
- * 会话数据访问层
+ * 会话列表聚合查询（后台）
  *
- * chat 模块中唯一允许写 SQL 的地方。
+ * 带「最后一条消息」的跨表查询放这里：
+ * 它既不属于单纯的 conversations，也不属于单纯的 messages。
+ * 单表 CRUD 分别在 conversation.repo / message.repo / rating.repo。
  */
 
 'use strict';
@@ -30,20 +32,4 @@ async function listRecentConversations(limit) {
   `).all(limit);
 }
 
-/** 全部评价（导出用） */
-async function listAllRatings() {
-  return db.prepare('SELECT * FROM ratings').all();
-}
-
-/** 某会话的全部消息，按时间正序（导出用） */
-async function listMessagesByConversation(conversationId) {
-  return db.prepare(
-    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'
-  ).all(conversationId);
-}
-
-module.exports = {
-  listRecentConversations,
-  listAllRatings,
-  listMessagesByConversation,
-};
+module.exports = { listRecentConversations };

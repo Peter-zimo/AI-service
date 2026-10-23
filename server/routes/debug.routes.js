@@ -36,7 +36,7 @@ router.get('/knowledge', async (req, res) => {
 });
 
 router.get('/ai-test', async (req, res) => {
-  const aiService = require('../services/ai');
+  const aiService = require('../modules/ai');
   const testQuery = req.query.q || '如何扫码开锁';
 
   try {

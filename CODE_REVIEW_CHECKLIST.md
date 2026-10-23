@@ -141,8 +141,8 @@ ai-customer-service/
 | 14 | **P1** | 敏感日志明文存储 | AES-256-CBC 加密 + 30天自动清理 | `server/services/sensitive.js` |
 | 15 | **P1** | 敏感词误杀业务词 | 移除 支付宝/微信支付/信用卡/扫码/二维码 | `敏感词库` |
 | 16 | **P2** | 调试接口生产可访问 | NODE_ENV=production 返回 404 | `server/index.js` |
-| 17 | **P2** | 无数据库备份 | 每日3点备份 + 保留7天 | `server/services/sqlite.js` |
-| 18 | **P2** | setInterval 无清理 | 改为 start/stopCacheRefresh | `server/services/database.js` |
+| 17 | **P2** | 无数据库备份 | 每日3点备份 + 保留7天 | `server/infra/db/sqlite.js` |
+| 18 | **P2** | setInterval 无清理 | 改为 start/stopCacheRefresh | `server/modules/chat/conversation.repo.js` |
 | 19 | **P2** | /api/stats/trend 无上限 | days 限制 Math.min(1, 365) | `server/routes/stats.js` |
 
 ### 4.2 已知安全限制 (可接受)
@@ -325,7 +325,7 @@ SENSITIVE_LOG_KEY=your_32_byte_key_here
 1. **`server/index.js`** — 入口文件, WebSocket 心跳, 全局异常捕获, 调试接口
 2. **`server/middleware/auth.js`** — 认证逻辑, 密码验证
 3. **`server/routes/chat.js`** — 核心业务, 访客归属校验
-4. **`server/services/ai.js`** — AI 调用, 知识库 RAG 流程
+4. **`server/modules/ai/ai.service.js`** — AI 调用, 知识库 RAG 流程
 5. **`public/index.html`** — 访客端, XSS 检查点
 
 ### 重点检查维度

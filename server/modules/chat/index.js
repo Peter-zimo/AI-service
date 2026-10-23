@@ -16,14 +16,13 @@
 
 'use strict';
 
-const chatService = require('./chat.service');
 const messageService = require('./message.service');
 const conversationService = require('./conversation.service');
 const streamSession = require('./stream-session');
 
 module.exports = {
   // 后台会话列表
-  listRecentConversations: chatService.listRecentConversations,
+  listRecentConversations: conversationService.listRecentConversations,
 
   // 消息
   sendMessage: messageService.sendMessage,
@@ -41,6 +40,14 @@ module.exports = {
   cancelQueue: conversationService.cancelQueue,
   exportConversationsCsv: conversationService.exportConversationsCsv,
 
+  // 客服工作台
+  addAgentMessage: conversationService.addAgentMessage,
+  closeByAgent: conversationService.closeByAgent,
+  getMessages: conversationService.getMessages,
+
   // SSE
   attachSse: streamSession.attachSse,
 };
+
+// 启动会话超时检查（与原 services/database.js 一致：模块加载即启动）
+require('./conversation.scheduler').start();

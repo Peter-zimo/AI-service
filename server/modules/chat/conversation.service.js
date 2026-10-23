@@ -8,19 +8,57 @@
 'use strict';
 
 const { v4: uuidv4 } = require('uuid');
-const db = require('../../services/database');
-const aiService = require('../../services/ai');
+const conversationRepo = require('./conversation.repo');
+const messageRepo = require('./message.repo');
+const ratingRepo = require('./rating.repo');
+const aiService = require('../ai');
 const humanService = require('../../services/human');
-const { toCsv } = require('../../utils/csv');
 const { canAccessVisitorConversation } = require('../../utils/access-control');
 const { CONVERSATION_STATUS, CONVERSATION_MODE } = require('../../config/constants');
+const stats = require('../stats');
 const { validateVisitorId, enforceVisitorAccess } = require('./validator');
-const repo = require('./chat.repo');
+const listRepo = require('./chat.repo');
+const exportService = require('./export.service');
 
-const EXPORT_LIMITS = { MAX_CONVS: 500, MAX_ROWS: 5000 };
+const DEFAULT_LIMIT = 100;
+const MAX_LIMIT = 500;
+
 
 const fail = (status, body) => ({ ok: false, status, body });
 const ok = (payload) => ({ ok: true, payload });
+
+// ============ 后台会话列表 ============
+
+/**
+ * 后台会话列表（带最后一条消息）
+ * @param {number|string} rawLimit 非数字或 0 回落默认值，再收敛到 1~500
+ */
+async function listRecentConversations(rawLimit) {
+  const parsed = parseInt(rawLimit, 10) || DEFAULT_LIMIT;
+  const limit = Math.min(Math.max(parsed, 1), MAX_LIMIT);
+
+  const rows = await listRepo.listRecentConversations(limit);
+
+  return rows.map(row => {
+    const conv = { ...row };
+
+    if (row.last_message_content) {
+      conv.lastMessage = {
+        content: row.last_message_content,
+        sender: row.last_message_role,
+        created_at: row.last_message_at,
+      };
+    } else {
+      conv.lastMessage = null;
+    }
+
+    delete conv.last_message_content;
+    delete conv.last_message_role;
+    delete conv.last_message_at;
+
+    return conv;
+  });
+}
 
 // ============ 创建 ============
 
@@ -29,8 +67,8 @@ async function createConversation({ visitorId, visitorName }) {
   if (!validateVisitorId(visitorId)) return fail(400, { success: false, error: 'visitorId格式无效' });
 
   const conversationId = uuidv4();
-  await db.conversations.create(conversationId, visitorId, visitorName || '访客');
-  await db.stats.incrementConversations();
+  await conversationRepo.create(conversationId, visitorId, visitorName || '访客');
+  await stats.incrementConversations();
 
   return ok({ success: true, conversationId });
 }
@@ -42,21 +80,21 @@ async function createConversation({ visitorId, visitorName }) {
  * @param {string} id
  */
 async function getConversationById(id) {
-  return db.conversations.getById(id);
+  return conversationRepo.getById(id);
 }
 
 async function getHistory(conversationId, visitorId) {
-  const conversation = await db.conversations.getById(conversationId);
+  const conversation = await conversationRepo.getById(conversationId);
 
   const accessErr = enforceVisitorAccess(conversation, visitorId);
   if (accessErr) return fail(403, { success: false, error: accessErr });
 
-  const messages = await db.messages.getByConversation(conversationId);
+  const messages = await messageRepo.getByConversation(conversationId);
   return ok({ success: true, messages });
 }
 
 async function getStatus(conversationId, visitorId) {
-  const conversation = await db.conversations.getById(conversationId);
+  const conversation = await conversationRepo.getById(conversationId);
   if (!conversation) return fail(404, { success: false, error: '会话不存在' });
 
   if (!canAccessVisitorConversation(conversation, visitorId)) {
@@ -75,18 +113,12 @@ async function getStatus(conversationId, visitorId) {
 }
 
 async function getConversationStats() {
-  const stats = await db.conversations.getStats();
+  const stats = await conversationRepo.getStats();
   return ok({ success: true, stats });
 }
 
 async function getDashboardStats() {
-  const today = (await db.stats.getToday()) || {
-    total_conversations: 0, total_messages: 0, ai_handled: 0,
-  };
-  const week = await db.stats.getRecent(7);
-  const summary = await db.stats.getSummary();
-
-  return ok({ success: true, stats: { today, week, summary } });
+  return ok({ success: true, stats: await stats.getDailySnapshot() });
 }
 
 // ============ 写 ============
@@ -94,14 +126,14 @@ async function getDashboardStats() {
 async function rate({ conversationId, score, comment, visitorId }) {
   if (!conversationId) return fail(400, { success: false, error: '缺少conversationId' });
 
-  const conversation = await db.conversations.getById(conversationId);
+  const conversation = await conversationRepo.getById(conversationId);
   const accessErr = enforceVisitorAccess(conversation, visitorId);
   if (accessErr) return fail(403, { success: false, error: accessErr });
 
   // 与重构前语义一致：parseInt 不指定进制，非数字回落 3，再夹到 1~5
   const validScore = Math.min(5, Math.max(1, parseInt(score) || 3));
-  await db.ratings.add(uuidv4(), conversationId, validScore, comment || null);
-  await db.conversations.close(conversationId, 'rated');
+  await ratingRepo.add(uuidv4(), conversationId, validScore, comment || null);
+  await conversationRepo.close(conversationId, 'rated');
   aiService.clearHistory(conversationId);
 
   return ok({ success: true });
@@ -110,7 +142,7 @@ async function rate({ conversationId, score, comment, visitorId }) {
 async function closeConversation({ conversationId, visitorId }) {
   if (!conversationId) return fail(400, { success: false, error: '缺少conversationId' });
 
-  const conversation = await db.conversations.getById(conversationId);
+  const conversation = await conversationRepo.getById(conversationId);
   if (!conversation) return fail(404, { success: false, error: '会话不存在' });
 
   const accessErr = enforceVisitorAccess(conversation, visitorId);
@@ -120,7 +152,7 @@ async function closeConversation({ conversationId, visitorId }) {
     return ok({ success: true, message: '会话已处于关闭状态' });
   }
 
-  await db.conversations.close(conversationId, 'manual');
+  await conversationRepo.close(conversationId, 'manual');
   aiService.clearHistory(conversationId);
 
   return ok({ success: true, message: '会话已关闭' });
@@ -131,7 +163,7 @@ async function closeConversation({ conversationId, visitorId }) {
 async function transferToHuman({ conversationId, visitorId }) {
   if (!conversationId) return fail(400, { success: false, error: '缺少conversationId' });
 
-  const conversation = await db.conversations.getById(conversationId);
+  const conversation = await conversationRepo.getById(conversationId);
   if (!conversation) return fail(404, { success: false, error: '会话不存在' });
 
   const accessErr = enforceVisitorAccess(conversation, visitorId);
@@ -168,9 +200,9 @@ async function transferToHuman({ conversationId, visitorId }) {
 
   if (result.success) {
     if (result.inQueue) {
-      await db.conversations.setMode(conversationId, CONVERSATION_MODE.QUEUE);
+      await conversationRepo.setMode(conversationId, CONVERSATION_MODE.QUEUE);
     } else {
-      await db.conversations.setMode(conversationId, CONVERSATION_MODE.HUMAN, result.agent);
+      await conversationRepo.setMode(conversationId, CONVERSATION_MODE.HUMAN, result.agent);
     }
   }
 
@@ -180,98 +212,39 @@ async function transferToHuman({ conversationId, visitorId }) {
 async function cancelQueue({ conversationId, visitorId }) {
   if (!conversationId) return fail(400, { success: false, error: '缺少conversationId' });
 
-  const conversation = await db.conversations.getById(conversationId);
+  const conversation = await conversationRepo.getById(conversationId);
 
   const accessErr = enforceVisitorAccess(conversation, visitorId);
   if (accessErr) return fail(403, { success: false, error: accessErr });
 
   if (conversation && conversation.mode === CONVERSATION_MODE.QUEUE) {
     humanService.cancelQueue(conversationId);
-    await db.conversations.setMode(conversationId, CONVERSATION_MODE.AI);
+    await conversationRepo.setMode(conversationId, CONVERSATION_MODE.AI);
   }
 
   return ok({ success: true, message: '已取消排队' });
 }
 
-// ============ 导出 ============
+// ============ 供客服工作台使用 ============
 
-const MODE_LABEL = { ai: 'AI', queue: '排队中', human: '人工' };
-const STATUS_LABEL = { active: '进行中', idle: '等待中', closed: '已结束' };
-
-const fmtTime = (value) => (value ? value.replace('T', ' ').slice(0, 19) : '');
-
-/**
- * 导出对话记录为 CSV 文本（每条消息一行）
- * @returns {Promise<{csv: string, filenameDate: string}>}
- */
-async function exportConversationsCsv() {
-  const conversations = await db.conversations.list(EXPORT_LIMITS.MAX_CONVS);
-  const allRatings = await repo.listAllRatings();
-  const rows = [];
-  let rowCount = 0;
-
-  for (const conv of conversations) {
-    if (rowCount >= EXPORT_LIMITS.MAX_ROWS) break;
-
-    const msgs = await repo.listMessagesByConversation(conv.id);
-    const rating = allRatings.find(r => r.conversation_id === conv.id);
-
-    // 列顺序必须与历史导出一致，否则下游脚本会错列
-    const common = {
-      '对话ID': conv.id,
-      '访客': conv.visitor_name || '访客',
-      '处理方式': MODE_LABEL[conv.mode] || conv.mode,
-      '会话状态': STATUS_LABEL[conv.status] || conv.status,
-      '满意度': rating ? `${rating.score}星` : '未评价',
-      '评价内容': rating ? rating.comment || '' : '',
-      '会话创建时间': fmtTime(conv.created_at),
-    };
-
-    if (msgs.length > 0) {
-      for (const msg of msgs) {
-        if (rowCount >= EXPORT_LIMITS.MAX_ROWS) break;
-        rows.push({
-          '对话ID': common['对话ID'],
-          '访客': common['访客'],
-          '消息内容': msg.content,
-          '角色': msg.role === 'user' ? '访客' : (msg.role === 'agent' ? '客服' : 'AI'),
-          '处理方式': common['处理方式'],
-          '会话状态': common['会话状态'],
-          '满意度': common['满意度'],
-          '评价内容': common['评价内容'],
-          '消息时间': fmtTime(msg.created_at),
-          '会话创建时间': common['会话创建时间'],
-        });
-        rowCount++;
-      }
-    } else {
-      // 无消息的会话不计入行数上限
-      rows.push({
-        '对话ID': common['对话ID'],
-        '访客': common['访客'],
-        '消息内容': '(无消息)',
-        '角色': '',
-        '处理方式': common['处理方式'],
-        '会话状态': common['会话状态'],
-        '满意度': common['满意度'],
-        '评价内容': common['评价内容'],
-        '消息时间': '',
-        '会话创建时间': common['会话创建时间'],
-      });
-    }
-  }
-
-  if (rows.length >= EXPORT_LIMITS.MAX_ROWS) {
-    console.log(`[导出] 数据量已达上限(${EXPORT_LIMITS.MAX_ROWS}行)，如有需要请分批导出`);
-  }
-
-  return {
-    csv: '\uFEFF' + toCsv(rows),
-    filenameDate: new Date().toISOString().slice(0, 10),
-  };
+/** 客服发送的消息落库 */
+async function addAgentMessage(conversationId, content) {
+  return messageRepo.add(uuidv4(), conversationId, 'agent', content);
 }
 
+/** 客服结束会话 */
+async function closeByAgent(conversationId) {
+  return conversationRepo.close(conversationId, 'agent_ended');
+}
+
+/** 取某会话的全部消息（客服用，无访客归属校验） */
+async function getMessages(conversationId) {
+  return messageRepo.getByConversation(conversationId);
+}
+
+
 module.exports = {
+  listRecentConversations,
   createConversation,
   getConversationById,
   getHistory,
@@ -282,5 +255,8 @@ module.exports = {
   closeConversation,
   transferToHuman,
   cancelQueue,
-  exportConversationsCsv,
+  exportConversationsCsv: exportService.exportConversationsCsv,
+  addAgentMessage,
+  closeByAgent,
+  getMessages,
 };

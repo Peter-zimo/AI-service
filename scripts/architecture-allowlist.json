@@ -1,30 +1,18 @@
 {
   "_comment": "架构检查的存量豁免清单。只支持「按文件 + 按规则」豁免，刻意不提供规则级全局豁免。每完成一批重构就删掉对应条目，只减不增。",
   "_updatedAt": "2026-10-23",
-  "_history": "B1 建清单（18 条）→ B2 收敛到 5 条 → B2 复审后再收敛到 5 条中的 2 条行数豁免 + 3 条 SQL 豁免。",
+  "_history": "B1 建清单（18 条）→ B2 收敛到 5 条 → B3 收敛到 2 条（仅剩两个待迁移模块的 SQL 豁免）。",
   "_rules": [
     "maxLines 只对超过 400 行全局上限的历史文件生效，用于拦截继续膨胀；400 行以内的文件不设基线。",
     "exemptRules 表示该文件暂时允许违反某条规则，修复后请立即删除对应项。"
   ],
   "files": {
-    "server/routes/stats.js": {
-      "maxLines": 638,
-      "reason": "B3 拆 modules/stats"
-    },
-    "server/services/ai.js": {
-      "maxLines": 494,
-      "reason": "B3 拆 modules/ai"
-    },
-    "server/services/database.js": {
-      "reason": "B3 按领域拆 repo 并迁入 modules/*",
-      "exemptRules": ["sql-only-in-repo"]
-    },
     "server/services/quality.js": {
-      "reason": "B3 拆 modules/quality",
+      "reason": "B4 拆 modules/quality（含 SQL 下沉）",
       "exemptRules": ["sql-only-in-repo"]
     },
     "server/services/unanswered.js": {
-      "reason": "B3 拆 modules/unanswered",
+      "reason": "B4 拆 modules/unanswered（含 SQL 下沉）",
       "exemptRules": ["sql-only-in-repo"]
     }
   }

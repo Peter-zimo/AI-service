@@ -10,10 +10,11 @@
 'use strict';
 
 const { v4: uuidv4 } = require('uuid');
-const db = require('../../services/database');
+const messageRepo = require('./message.repo');
 const metrics = require('../../infra/metrics');
 const unansweredService = require('../../services/unanswered');
 const knowledgeService = require('../../modules/knowledge');
+const stats = require('../stats');
 const { AiStreamClient } = require('../../services/stream_client');
 const { env } = require('../../config');
 const streamSession = require('./stream-session');
@@ -122,8 +123,8 @@ async function finishWithContent({ conversationId, message, streamId, fullConten
 
   const finalSource = (finalContent !== fullContent) ? 'fallback' : detectedSource;
 
-  await db.messages.add(uuidv4(), conversationId, 'assistant', finalContent, null, finalSource);
-  await db.stats.incrementAiHandled();
+  await messageRepo.add(uuidv4(), conversationId, 'assistant', finalContent, null, finalSource);
+  await stats.incrementAiHandled();
   streamSession.endStream(streamId, finalContent, finalSource);
   metrics.inc('chat_messages_total', [finalSource]);
 
@@ -154,8 +155,8 @@ async function runAgentStream({ conversationId, message, streamId }) {
     }
 
     // 流正常结束但没有任何内容 → 通用兜底
-    await db.messages.add(uuidv4(), conversationId, 'assistant', FALLBACK_TEXT, null, 'fallback');
-    await db.stats.incrementAiHandled();
+    await messageRepo.add(uuidv4(), conversationId, 'assistant', FALLBACK_TEXT, null, 'fallback');
+    await stats.incrementAiHandled();
     streamSession.endStream(streamId, FALLBACK_TEXT, 'fallback');
     try { unansweredService.recordQuery(message); } catch (e) { /* 忽略 */ }
 
@@ -179,8 +180,8 @@ async function runAgentStream({ conversationId, message, streamId }) {
       console.error(`[LangChain Agent] 知识库兜底失败: ${kbErr.message}`);
     }
 
-    await db.messages.add(uuidv4(), conversationId, 'assistant', fallbackAnswer, null, fallbackType);
-    await db.stats.incrementAiHandled();
+    await messageRepo.add(uuidv4(), conversationId, 'assistant', fallbackAnswer, null, fallbackType);
+    await stats.incrementAiHandled();
     streamSession.endStream(streamId, fallbackAnswer, fallbackType);
     try { unansweredService.recordQuery(message); } catch (e) { /* 忽略 */ }
   }
