@@ -10,7 +10,7 @@ process.env.SQLITE_DB_PATH = dbPath;
 process.env.QUALITY_AUDIT_DB_PATH = auditPath;
 process.env.DISABLE_DB_BACKUP = 'true';
 const db = require('../server/infra/db');
-const quality = require('../server/services/quality');
+const quality = require('../server/modules/quality');
 
 test.after(() => {
   db.close();
@@ -36,8 +36,8 @@ test('Badcase update rejects an unsupported lifecycle status', () => {
   assert.throws(() => quality.updateBadcase('missing', { status: 'ignored' }, 'admin'), /status/);
 });
 
-test('quality candidates expose only unanswered-query fields', () => {
-  const candidates = quality.listCandidates(10);
+test('quality candidates expose only unanswered-query fields', async () => {
+  const candidates = await quality.listCandidates(10);
   for (const row of candidates) {
     assert.deepEqual(Object.keys(row).sort(), ['count', 'first_seen', 'last_seen', 'query', 'status']);
   }

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { expandKnowledge } = require('../server/services/langchain_client');
+const { expandKnowledge } = require('../server/infra/clients/langchain');
 
 test('knowledge expansion uses the internal client request path', async () => {
   let received;

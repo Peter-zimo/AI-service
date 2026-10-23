@@ -10,8 +10,8 @@ const repo = require('./stats.repo');
 const core = require('./metrics-core');
 const ops = require('./metrics-ops');
 const exporter = require('./stats.export');
-const humanService = require('../../services/human');
-const unansweredService = require('../../services/unanswered');
+const humanService = require('../human');
+const unansweredService = require('../unanswered');
 
 const DEFAULT_TREND_DAYS = 30;
 const DEFAULT_OPS_DAYS = 7;
@@ -64,15 +64,15 @@ function getAgentWorkload(rawDays) {
 
 function getQueueStats(rawDays) {
   const days = clampDays(rawDays, DEFAULT_OPS_DAYS, MAX_OPS_DAYS);
-  const currentQueueLength = humanService?.queue?.length || 0;
+  const currentQueueLength = humanService.getQueueInfo().length;
   return ops.buildQueueStats(repo.snapshot(), days, currentQueueLength);
 }
 
-function getUnansweredTrend(rawDays) {
+async function getUnansweredTrend(rawDays) {
   const days = clampDays(rawDays, DEFAULT_TREND_DAYS);
 
-  const stats = unansweredService.stats();
-  const trend = unansweredService.trend(days);
+  const stats = await unansweredService.stats();
+  const trend = await unansweredService.trend(days);
   const totalAll = stats.pending + stats.added + stats.dismissed;
 
   return {

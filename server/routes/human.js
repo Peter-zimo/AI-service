@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
-const humanService = require('../services/human');
+const humanService = require('../modules/human');
 const chat = require('../modules/chat');
 const { getJwtSecret, sign, canManageAgent } = require('../middleware/auth');
 const { canAccessAgentConversation } = require('../utils/access-control');
@@ -77,7 +77,7 @@ router.get('/agent/:agentId', async (req, res) => {
   try {
     const { agentId } = req.params;
     if (!requireAgentAccess(req, res, agentId)) return;
-    const agent = humanService.agents.get(agentId);
+    const agent = humanService.getAgentView(agentId);
     
     if (!agent) {
       return res.status(404).json({ success: false, error: '客服不存在' });
@@ -131,7 +131,7 @@ router.post('/send-message', async (req, res) => {
     }
     if (!requireAgentAccess(req, res, agentId)) return;
 
-    const agent = humanService.agents.get(agentId);
+    const agent = humanService.getAgentView(agentId);
     if (!agent) {
       return res.status(404).json({ success: false, error: '客服不存在' });
     }
@@ -167,7 +167,7 @@ router.post('/end-conversation', async (req, res) => {
     }
     if (!requireAgentAccess(req, res, agentId)) return;
 
-    const agent = humanService.agents.get(agentId);
+    const agent = humanService.getAgentView(agentId);
     if (!agent) {
       return res.status(404).json({ success: false, error: '客服不存在' });
     }

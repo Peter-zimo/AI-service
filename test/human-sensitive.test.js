@@ -4,10 +4,22 @@
  */
 const test = require('node:test');
 const assert = require('node:assert');
+const os = require('node:os');
+const path = require('node:path');
+const fs = require('node:fs');
 
-const sensitive = require('../server/services/sensitive');
-const human = require('../server/services/human');
+// 坐席数据文件指向临时路径：login() 会触发密码哈希升级并写盘，
+// 不隔离的话会把测试账号写进 data/agents.json
+const AGENTS_TEST_PATH = path.join(os.tmpdir(), `agents-test-${process.pid}-${Date.now()}.json`);
+process.env.AGENTS_DATA_PATH = AGENTS_TEST_PATH;
+
+const sensitive = require('../server/modules/sensitive');
+const human = require('../server/modules/human');
 const { AGENT_STATUS } = human;
+
+test.after(() => {
+  fs.rmSync(AGENTS_TEST_PATH, { force: true });
+});
 
 // ============ 状态保存 / 恢复 ============
 const origSensitiveWords = JSON.parse(JSON.stringify(sensitive.sensitiveWords || {}));
@@ -22,8 +34,8 @@ function resetSensitive() {
 }
 
 function freshHuman() {
-  human.agents.clear();
-  human.queue = [];
+  human._test.agents.clear();
+  human._test.queue.length = 0;
   return human;
 }
 function addAgent(id, overrides = {}) {
@@ -32,7 +44,7 @@ function addAgent(id, overrides = {}) {
     status: AGENT_STATUS.OFFLINE, currentConversation: null, totalServed: 0,
     ...overrides,
   };
-  human.agents.set(id, agent);
+  human._test.agents.set(id, agent);
   return agent;
 }
 
@@ -112,8 +124,8 @@ test('human requestHuman assigns directly to an available agent', () => {
   assert.equal(r.success, true);
   assert.equal(r.inQueue, false);
   assert.equal(r.agent.id, 'a1');
-  assert.equal(human.agents.get('a1').status, AGENT_STATUS.BUSY);
-  assert.equal(human.agents.get('a1').currentConversation, 'conv-1');
+  assert.equal(human._test.agents.get('a1').status, AGENT_STATUS.BUSY);
+  assert.equal(human._test.agents.get('a1').currentConversation, 'conv-1');
 });
 
 test('human requestHuman queues in FIFO order when agents busy', () => {
@@ -122,8 +134,8 @@ test('human requestHuman queues in FIFO order when agents busy', () => {
   const r2 = human.requestHuman('conv-2');
   assert.equal(r1.success, true); assert.equal(r1.inQueue, true); assert.equal(r1.position, 1);
   assert.equal(r2.success, true); assert.equal(r2.position, 2);
-  assert.equal(human.queue[0].conversationId, 'conv-1');
-  assert.equal(human.queue[1].conversationId, 'conv-2');
+  assert.equal(human._test.queue[0].conversationId, 'conv-1');
+  assert.equal(human._test.queue[1].conversationId, 'conv-2');
 });
 
 test('human requestHuman returns existing queue position', () => {
@@ -139,15 +151,15 @@ test('human goOffline returns current conversation to queue', () => {
   freshHuman(); addAgent('a1', { status: AGENT_STATUS.BUSY, currentConversation: 'conv-1' });
   const ok = human.goOffline('a1');
   assert.equal(ok, true);
-  assert.equal(human.agents.get('a1').status, AGENT_STATUS.OFFLINE);
-  assert.ok(human.queue.some(q => q.conversationId === 'conv-1'));
+  assert.equal(human._test.agents.get('a1').status, AGENT_STATUS.OFFLINE);
+  assert.ok(human._test.queue.some(q => q.conversationId === 'conv-1'));
 });
 
 test('human cancelQueue removes the queued conversation', () => {
   freshHuman(); addAgent('a1', { status: AGENT_STATUS.BUSY, currentConversation: 'c0' });
   human.requestHuman('conv-1');
   assert.equal(human.cancelQueue('conv-1'), true);
-  assert.equal(human.queue.length, 0);
+  assert.equal(human._test.queue.length, 0);
   assert.equal(human.cancelQueue('conv-1'), false);
 });
 
@@ -166,6 +178,6 @@ test('human processQueue assigns queued conversations to online agents', () => {
   // 一个客服变空闲 → 触发 processQueue → 分配一个排队会话
   addAgent('a3', { status: AGENT_STATUS.ONLINE });
   human.processQueue();
-  assert.equal(human.queue.length, 1);
-  assert.equal(human.agents.get('a3').status, AGENT_STATUS.BUSY);
+  assert.equal(human._test.queue.length, 1);
+  assert.equal(human._test.agents.get('a3').status, AGENT_STATUS.BUSY);
 });

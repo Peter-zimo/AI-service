@@ -17,8 +17,8 @@
 const { v4: uuidv4 } = require('uuid');
 const conversationRepo = require('./conversation.repo');
 const messageRepo = require('./message.repo');
-const sensitiveService = require('../../services/sensitive');
-const humanService = require('../../services/human');
+const sensitiveService = require('../sensitive');
+const humanService = require('../human');
 const { CONVERSATION_STATUS, CONVERSATION_MODE, MESSAGE } = require('../../config/constants');
 const stats = require('../stats');
 const { enforceVisitorAccess } = require('./validator');

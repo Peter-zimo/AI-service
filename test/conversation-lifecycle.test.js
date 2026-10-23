@@ -14,9 +14,12 @@ const { CONVERSATION_STATUS } = require('../server/config/constants');
 const db = require('../server/infra/db');
 
 test.after(() => {
-  // 快照缓存与会话超时检查都带定时器，停掉避免进程挂住
-  try { require('../server/modules/stats').stopCache(); } catch (_) { /* 未加载则忽略 */ }
-  try { require('../server/modules/chat/conversation.scheduler').stop(); } catch (_) { /* 未加载则忽略 */ }
+  // 只在模块已被加载时停定时器：直接 require 反而会触发它们启动
+  for (const mod of ['../server/modules/stats', '../server/modules/chat/conversation.scheduler']) {
+    if (require.cache[require.resolve(mod)]) {
+      try { require(mod).stopCache ? require(mod).stopCache() : require(mod).stop(); } catch (_) { /* 忽略 */ }
+    }
+  }
   db.close();
   fs.rmSync(dbPath, { force: true });
 });

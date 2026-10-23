@@ -1,19 +1,11 @@
 {
   "_comment": "架构检查的存量豁免清单。只支持「按文件 + 按规则」豁免，刻意不提供规则级全局豁免。每完成一批重构就删掉对应条目，只减不增。",
   "_updatedAt": "2026-10-23",
-  "_history": "B1 建清单（18 条）→ B2 收敛到 5 条 → B3 收敛到 2 条（仅剩两个待迁移模块的 SQL 豁免）。",
+  "_history": "B1 建清单（18 条）→ B2 收敛到 5 条 → B3 收敛到 2 条 → B4 归零：services/ 已清空，所有 SQL 都在 *.repo.js 与 infra/db/。",
   "_rules": [
     "maxLines 只对超过 400 行全局上限的历史文件生效，用于拦截继续膨胀；400 行以内的文件不设基线。",
-    "exemptRules 表示该文件暂时允许违反某条规则，修复后请立即删除对应项。"
+    "exemptRules 表示该文件暂时允许违反某条规则，修复后请立即删除对应项。",
+    "清单为空是目标状态。新增条目需要在 code review 里给出理由和清除计划。"
   ],
-  "files": {
-    "server/services/quality.js": {
-      "reason": "B4 拆 modules/quality（含 SQL 下沉）",
-      "exemptRules": ["sql-only-in-repo"]
-    },
-    "server/services/unanswered.js": {
-      "reason": "B4 拆 modules/unanswered（含 SQL 下沉）",
-      "exemptRules": ["sql-only-in-repo"]
-    }
-  }
+  "files": {}
 }

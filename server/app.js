@@ -42,7 +42,7 @@ const debugRoutes = require('./routes/debug.routes');
 const healthRoutes = require('./routes/health.routes');
 const brandRoutes = require('./routes/brand.routes');
 
-const humanService = require('./services/human');
+const humanService = require('./modules/human');
 const chatService = require('./modules/chat');
 const { jwtAuth, changePassword, verifyWebSocketAgentToken } = require('./middleware/auth');
 

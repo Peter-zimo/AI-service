@@ -98,9 +98,9 @@ router.get('/queue-stats', (req, res) => {
 });
 
 // ============ 未匹配查询趋势 ============
-router.get('/unanswered-trend', (req, res) => {
+router.get('/unanswered-trend', async (req, res) => {
   try {
-    res.json({ success: true, data: stats.getUnansweredTrend(req.query.days) });
+    res.json({ success: true, data: await stats.getUnansweredTrend(req.query.days) });
   } catch (e) {
     guard(res, e, '[统计] unanswered-trend 错误', '获取未匹配查询趋势失败');
   }

@@ -6,7 +6,7 @@
  * - 可注入 fetchImpl 便于单测（不依赖真实 AI 服务）
  */
 
-const { AiTimeoutError, withTimeout, CircuitBreaker } = require('../utils/withTimeout');
+const { AiTimeoutError, withTimeout, CircuitBreaker } = require('../../utils/withTimeout');
 
 class AiStreamClient {
   /**

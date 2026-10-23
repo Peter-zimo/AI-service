@@ -4,14 +4,14 @@
  */
 const express = require('express');
 const router = express.Router();
-const unansweredService = require('../services/unanswered');
+const unansweredService = require('../modules/unanswered');
 
 // 获取列表
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const status = req.query.status || 'pending';
     const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
-    const data = unansweredService.list(status, limit);
+    const data = await unansweredService.list(status, limit);
     res.json({ success: true, data, total: data.length });
   } catch (error) {
     console.error('[未匹配查询] 获取列表失败:', error);
@@ -20,9 +20,9 @@ router.get('/', (req, res) => {
 });
 
 // 统计
-router.get('/stats', (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
-    const stats = unansweredService.stats();
+    const stats = await unansweredService.stats();
     res.json({ success: true, ...stats });
   } catch (error) {
     console.error('[未匹配查询] 统计失败:', error);
@@ -31,10 +31,10 @@ router.get('/stats', (req, res) => {
 });
 
 // 补充答案（→ 自动添加到知识库）
-router.post('/approve/:id', (req, res) => {
+router.post('/approve/:id', async (req, res) => {
   try {
     const { answer, createdBy } = req.body || {};
-    const result = unansweredService.approve(req.params.id, answer, createdBy || req.auth?.username);
+    const result = await unansweredService.approve(req.params.id, answer, createdBy || req.auth?.username);
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -46,9 +46,9 @@ router.post('/approve/:id', (req, res) => {
 });
 
 // 忽略
-router.post('/dismiss/:id', (req, res) => {
+router.post('/dismiss/:id', async (req, res) => {
   try {
-    const result = unansweredService.dismiss(req.params.id);
+    const result = await unansweredService.dismiss(req.params.id);
     res.json(result);
   } catch (error) {
     console.error('[未匹配查询] 忽略失败:', error);

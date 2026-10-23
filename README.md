@@ -101,19 +101,23 @@ AI智能客服V3（node.js版）/
 │   ├── config/              # 运行时配置（env 类型化、常量、AI 密钥解析）
 │   ├── routes/              # API 路由（只做 取参 → 调 service → 返回）
 │   ├── modules/             # 业务域，每个域自包含
-│   │   ├── knowledge/       #   知识库：repo / service / retrieval / embedding / segment
+│   │   ├── knowledge/       #   知识库：repo / service / retrieval / embedding / segment / import / export
 │   │   ├── chat/            #   会话：conversation·message·rating repo +
 │   │   │                    #   message·conversation·export service +
 │   │   │                    #   ai-runner / stream-session / queue / validator / scheduler
 │   │   ├── stats/           #   统计：repo / metrics-core / metrics-ops / export / service
 │   │   ├── ai/              #   AI：config / providers / responses / service
-│   │   └── actions/         #   业务执行：订单查询 / 申诉 / 退款 / 人工复核
+│   │   ├── human/           #   人工客服：agent.registry / queue / sockets / service
+│   │   ├── actions/         #   业务执行：订单查询 / 申诉 / 退款 / 人工复核
+│   │   ├── quality/         #   质量评测审计（独立 quality.db）
+│   │   ├── unanswered/      #   未答收集与知识库闭环
+│   │   └── sensitive/       #   敏感词过滤
 │   ├── infra/               # 基础设施
-│   │   ├── db/              #   引擎选择 + sqlite / postgres 实现
+│   │   ├── db/              #   引擎选择 + sqlite / postgres / secondary
+│   │   ├── clients/         #   Python 服务客户端 / 流式客户端
 │   │   ├── logger.js        #   winston 日志
 │   │   └── metrics.js       #   Prometheus 指标
-│   ├── middleware/          # JWT 认证、限流、安全头、全局错误处理
-│   ├── services/            # 待迁移的旧服务层（B3 批次逐步并入 modules/）
+│   ├── middleware/          # JWT 认证、限流、安全头、上传、全局错误处理
 │   └── data/                # SQLite 数据库与种子数据
 ├── scripts/                 # 运维与质量脚本
 │   └── check-architecture.js# 架构护栏（五条硬约束，已接入 npm test）

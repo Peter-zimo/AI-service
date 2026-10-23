@@ -5,7 +5,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { AiTimeoutError, withTimeout, CircuitBreaker } = require('../server/utils/withTimeout');
-const { AiStreamClient } = require('../server/services/stream_client');
+const { AiStreamClient } = require('../server/infra/clients/stream');
 
 // ============ 1. 首字节超时 ============
 test('withTimeout: 响应头超时触发 abort 并抛 AiTimeoutError', async () => {

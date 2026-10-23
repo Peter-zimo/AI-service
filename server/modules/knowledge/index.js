@@ -21,6 +21,8 @@ const { KnowledgeService } = require('./knowledge.service');
 const { buildFtsMatchExpression, rrfFusion } = require('./retrieval');
 const { chineseSegment } = require('./segment');
 const { extractKeywords } = require('./keywords');
+const importService = require('./import.service');
+const exportService = require('./export.service');
 
 // ============ 初始化（建表 + 首次种子迁移） ============
 
@@ -41,5 +43,13 @@ knowledgeService._test = {
   buildFtsMatchExpression,
   rrfFusion,
 };
+
+// 导入 / 导出能力：组合 import.service 与 export.service，
+// 两者需要 service 实例，故在此注入，避免与入口形成循环依赖
+knowledgeService.parseImportFile = importService.parseFile;
+knowledgeService.buildImportPreview = (rows) => importService.buildPreview(knowledgeService, rows);
+knowledgeService.collectBatchItems = importService.collectBatchItems;
+knowledgeService.buildExportCsv = exportService.buildCsv;
+knowledgeService.exportFilename = exportService.filename;
 
 module.exports = knowledgeService;

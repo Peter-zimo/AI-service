@@ -55,7 +55,7 @@ class SensitiveService {
 
   // 加载敏感词库
   loadWords() {
-    const dataPath = path.join(__dirname, '../data/sensitive-words.json');
+    const dataPath = path.join(__dirname, '../../data/sensitive-words.json');
     try {
       if (fs.existsSync(dataPath)) {
         const data = fs.readFileSync(dataPath, 'utf-8');
@@ -76,7 +76,7 @@ class SensitiveService {
 
   // 保存敏感词库
   saveWords() {
-    const dataPath = path.join(__dirname, '../data/sensitive-words.json');
+    const dataPath = path.join(__dirname, '../../data/sensitive-words.json');
     try {
       fs.writeFileSync(dataPath, JSON.stringify(this.sensitiveWords, null, 2), 'utf-8');
     } catch (e) {
@@ -97,7 +97,7 @@ class SensitiveService {
 
   // 加载日志
   loadLogs() {
-    const logPath = path.join(__dirname, '../data/sensitive-logs.json');
+    const logPath = path.join(__dirname, '../../data/sensitive-logs.json');
     try {
       if (fs.existsSync(logPath)) {
         const data = fs.readFileSync(logPath, 'utf-8');
@@ -110,7 +110,7 @@ class SensitiveService {
 
   // 保存日志（容量+时间双重清理）
   saveLogs() {
-    const logPath = path.join(__dirname, '../data/sensitive-logs.json');
+    const logPath = path.join(__dirname, '../../data/sensitive-logs.json');
     try {
       // 【修复】1. 按容量限制：只保留最近的 LOG_MAX_SIZE 条
       // 【新增】2. 按时间限制：只保留最近 30 天内的记录

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const sensitiveService = require('../services/sensitive');
+const sensitiveService = require('../modules/sensitive');
 const { toCsv } = require('../utils/csv');
 
 // 获取所有敏感词（转换为前端期望的格式）

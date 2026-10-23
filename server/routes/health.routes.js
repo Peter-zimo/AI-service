@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
   let langchain = { reachable: false, error: 'LangChain 服务连接失败' };
 
   try {
-    const langchainClient = require('../services/langchain_client');
+    const langchainClient = require('../infra/clients/langchain');
     const health = await Promise.race([
       langchainClient.health(),
       new Promise((_, reject) =>

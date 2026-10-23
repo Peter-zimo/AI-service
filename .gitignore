@@ -9,6 +9,11 @@ node_modules/
 # 数据文件（SQLite数据库、客服账号、敏感词库等）
 server/data/
 
+# 本地临时数据库（调试/验证用，禁止入库）
+/*.db
+/*.db-shm
+/*.db-wal
+
 # 日志
 logs/
 *.log

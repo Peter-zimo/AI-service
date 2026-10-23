@@ -1,6 +1,6 @@
 const express = require('express');
 const { toCsv } = require('../utils/csv');
-const quality = require('../services/quality');
+const quality = require('../modules/quality');
 
 const router = express.Router();
 
@@ -47,10 +47,10 @@ router.get('/runs/:id/export', (req, res) => {
   res.send('\uFEFF' + toCsv(rows));
 });
 
-router.get('/candidates', (req, res) => {
+router.get('/candidates', async (req, res) => {
   const value = limit(req.query.limit);
   if (!value) return res.status(400).json({ success: false, error: 'limit must be between 1 and 500' });
-  res.json({ success: true, data: quality.listCandidates(value) });
+  res.json({ success: true, data: await quality.listCandidates(value) });
 });
 
 module.exports = router;

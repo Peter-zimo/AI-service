@@ -35,7 +35,7 @@ async function runEvaluation(options = {}) {
     knowledge = require('../server/modules/knowledge');
     await knowledge._ready;
   }
-  if (!quality && options.persist !== false) quality = require('../server/services/quality');
+  if (!quality && options.persist !== false) quality = require('../server/modules/quality');
   const knowledgeHash = options.knowledgeHash || localKnowledgeHash(knowledge);
   if (quality) quality.createRun({ id: runId, suiteVersion: 'v1', knowledgeHash, startedAt, actor: options.actor || 'cli' });
 

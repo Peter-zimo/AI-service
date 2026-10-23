@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
 
-const { createLangchainClient } = require('../server/services/langchain_client');
+const { createLangchainClient } = require('../server/infra/clients/langchain');
 
 /** 启动一个返回固定 JSON 的本地桩服务器 */
 function startStub(responseBody) {
