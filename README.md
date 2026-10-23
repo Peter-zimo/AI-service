@@ -102,7 +102,11 @@ AI智能客服V3（node.js版）/
 │   ├── routes/              # API 路由（只做 取参 → 调 service → 返回）
 │   ├── modules/             # 业务域，每个域自包含
 │   │   ├── knowledge/       #   知识库：repo / service / retrieval / embedding / segment
-│   │   ├── chat/            #   会话：repo / service / message / ai-runner / stream-session / queue
+│   │   ├── chat/            #   会话：conversation·message·rating repo +
+│   │   │                    #   message·conversation·export service +
+│   │   │                    #   ai-runner / stream-session / queue / validator / scheduler
+│   │   ├── stats/           #   统计：repo / metrics-core / metrics-ops / export / service
+│   │   ├── ai/              #   AI：config / providers / responses / service
 │   │   └── actions/         #   业务执行：订单查询 / 申诉 / 退款 / 人工复核
 │   ├── infra/               # 基础设施
 │   │   ├── db/              #   引擎选择 + sqlite / postgres 实现
