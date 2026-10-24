@@ -159,6 +159,18 @@ function createRedisQueue(url, { keyPrefix = 'cs:', maxAttempts = DEFAULT_MAX_AT
     return stop;
   }
 
+  /** 取消等待中的任务（执行中的任务不支持中断） */
+  async function cancel(id) {
+    const job = await getJob(id);
+    if (!job) throw new Error('任务不存在');
+    if (job.status !== 'waiting') throw new Error('仅等待中的任务可取消');
+
+    await withTimeout(client.lRem(queueKey(job.topic), 0, id), OP_TIMEOUT_MS, 'queue lRem');
+    job.status = 'cancelled';
+    await saveJob(job);
+    return job;
+  }
+
   async function listJobs({ topic, status, limit = 50 } = {}) {
     await ensure();
     const capped = Math.max(1, Math.min(Number(limit) || 50, 200));
@@ -178,7 +190,7 @@ function createRedisQueue(url, { keyPrefix = 'cs:', maxAttempts = DEFAULT_MAX_AT
 
   async function stats() {
     const jobs = await listJobs({ limit: 200 });
-    const out = { waiting: 0, active: 0, completed: 0, failed: 0, total: jobs.length };
+    const out = { waiting: 0, active: 0, completed: 0, failed: 0, cancelled: 0, total: jobs.length };
     for (const job of jobs) out[job.status] = (out[job.status] || 0) + 1;
     return out;
   }
@@ -190,7 +202,7 @@ function createRedisQueue(url, { keyPrefix = 'cs:', maxAttempts = DEFAULT_MAX_AT
     try { await withTimeout(client.quit(), OP_TIMEOUT_MS, 'queue client quit'); } catch (_) { /* 忽略 */ }
   }
 
-  return { kind: 'redis', publish, consume, getJob, listJobs, stats, close, ready };
+  return { kind: 'redis', publish, consume, cancel, getJob, listJobs, stats, close, ready };
 }
 
 module.exports = { createRedisQueue, DEFAULT_MAX_ATTEMPTS };

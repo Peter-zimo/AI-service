@@ -1,8 +1,8 @@
 /**
  * 异步任务注册表
  *
- * 职责：任务类型注册、入队、状态查询、worker 生命周期。
- * 队列后端在 infra/queue（内存 / Redis）。
+ * 职责：任务类型注册、入队、状态查询、重试/取消、worker 生命周期。
+ * 队列后端在 infra/queue（内存 / Redis），接口统一为异步。
  */
 
 'use strict';
@@ -24,23 +24,36 @@ function has(type) {
   return handlers.has(type);
 }
 
-function enqueue(type, payload) {
+async function enqueue(type, payload) {
   if (!handlers.has(type)) {
     throw new Error(`未知任务类型: ${type}`);
   }
   return queue.publish(type, payload);
 }
 
-function getJob(id) {
+async function getJob(id) {
   return queue.getJob(id);
 }
 
-function listJobs(filter) {
+async function listJobs(filter) {
   return queue.listJobs(filter);
 }
 
-function stats() {
+async function stats() {
   return queue.stats();
+}
+
+/** 失败任务重新入队（生成新任务，保留原记录） */
+async function retry(id) {
+  const job = await queue.getJob(id);
+  if (!job) throw new Error('任务不存在');
+  if (job.status !== 'failed') throw new Error('仅失败任务可重试');
+  return queue.publish(job.topic, job.payload);
+}
+
+/** 取消等待中的任务（执行中的任务不支持中断） */
+async function cancel(id) {
+  return queue.cancel(id);
 }
 
 function startWorkers() {
@@ -67,6 +80,8 @@ module.exports = {
   getJob,
   listJobs,
   stats,
+  retry,
+  cancel,
   startWorkers,
   stopWorkers,
   handlers,

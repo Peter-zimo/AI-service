@@ -69,6 +69,18 @@ test('memory queue marks a job failed after max attempts', async () => {
   await queue.close();
 });
 
+test('memory queue cancels a waiting job', async () => {
+  const queue = createMemoryQueue();
+  const id = queue.publish('cancel-topic', {});
+
+  const job = await queue.cancel(id);
+  assert.equal(job.status, 'cancelled');
+  assert.equal(queue.getJob(id).status, 'cancelled');
+  assert.equal(queue.stats().cancelled, 1);
+
+  await queue.close();
+});
+
 test('memory queue stats counts statuses', async () => {
   const queue = createMemoryQueue();
   queue.consume('stats-topic', async () => 'done');

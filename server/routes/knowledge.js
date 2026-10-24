@@ -146,7 +146,7 @@ router.post('/import/confirm', async (req, res) => {
       return res.status(400).json({ success: false, error: '没有可导入的数据' });
     }
 
-    const jobId = require('../jobs').enqueue('knowledge.import', { items });
+    const jobId = await require('../jobs').enqueue('knowledge.import', { items });
     res.json({ success: true, async: true, jobId, statusUrl: `/api/jobs/${jobId}` });
   } catch (error) {
     console.error('导入任务提交失败:', error);
@@ -177,11 +177,13 @@ router.post('/batch', (req, res) => {
         });
       }
 
-      const result = await knowledgeService.batchAdd(items);
+      const jobId = await require('../jobs').enqueue('knowledge.import', { items });
       res.json({
         success: true,
-        message: `成功添加 ${result.added} 条，跳过 ${result.skipped} 条（重复）`,
-        data: result,
+        async: true,
+        jobId,
+        statusUrl: `/api/jobs/${jobId}`,
+        message: `已提交导入任务（${items.length} 条），请轮询任务状态`,
       });
     } catch (error) {
       console.error('批量导入失败:', error);
@@ -240,10 +242,10 @@ router.get('/search/query', async (req, res) => {
 
 // ============ 异步重算向量 ============
 
-router.post('/embeddings/recompute', (req, res) => {
+router.post('/embeddings/recompute', async (req, res) => {
   try {
     const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : null;
-    const jobId = require('../jobs').enqueue('knowledge.embedding', { ids });
+    const jobId = await require('../jobs').enqueue('knowledge.embedding', { ids });
     res.json({ success: true, jobId, statusUrl: `/api/jobs/${jobId}` });
   } catch (error) {
     guard(res, error, '提交向量重算任务失败', '提交任务失败');

@@ -28,7 +28,7 @@ function createMemoryQueue({ maxAttempts = DEFAULT_MAX_ATTEMPTS } = {}) {
   const sweepTimer = setInterval(() => {
     const cutoff = now() - JOB_TTL_MS;
     for (const [id, job] of jobs) {
-      if ((job.status === 'completed' || job.status === 'failed') && job.updatedAt < cutoff) {
+      if (['completed', 'failed', 'cancelled'].includes(job.status) && job.updatedAt < cutoff) {
         jobs.delete(id);
       }
     }
@@ -122,6 +122,21 @@ function createMemoryQueue({ maxAttempts = DEFAULT_MAX_ATTEMPTS } = {}) {
     };
   }
 
+  /** 取消等待中的任务（执行中的任务不支持中断） */
+  function cancel(id) {
+    const job = jobs.get(id);
+    if (!job) throw new Error('任务不存在');
+    if (job.status !== 'waiting') throw new Error('仅等待中的任务可取消');
+
+    const state = topicState(job.topic);
+    const index = state.waiting.indexOf(id);
+    if (index >= 0) state.waiting.splice(index, 1);
+
+    job.status = 'cancelled';
+    job.updatedAt = now();
+    return job;
+  }
+
   function getJob(id) {
     return jobs.get(id) || null;
   }
@@ -134,7 +149,7 @@ function createMemoryQueue({ maxAttempts = DEFAULT_MAX_ATTEMPTS } = {}) {
   }
 
   function stats() {
-    const out = { waiting: 0, active: 0, completed: 0, failed: 0, total: jobs.size };
+    const out = { waiting: 0, active: 0, completed: 0, failed: 0, cancelled: 0, total: jobs.size };
     for (const job of jobs.values()) {
       out[job.status] = (out[job.status] || 0) + 1;
     }
@@ -149,7 +164,7 @@ function createMemoryQueue({ maxAttempts = DEFAULT_MAX_ATTEMPTS } = {}) {
     consumers.clear();
   }
 
-  return { kind: 'memory', publish, consume, getJob, listJobs, stats, close };
+  return { kind: 'memory', publish, consume, cancel, getJob, listJobs, stats, close };
 }
 
 module.exports = { createMemoryQueue, DEFAULT_MAX_ATTEMPTS, JOB_TTL_MS };
