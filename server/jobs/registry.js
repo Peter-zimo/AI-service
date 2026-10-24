@@ -43,11 +43,13 @@ async function stats() {
   return queue.stats();
 }
 
-/** 失败任务重新入队（生成新任务，保留原记录） */
+/** 失败/已完成任务重新入队（生成新任务，保留原记录） */
 async function retry(id) {
   const job = await queue.getJob(id);
   if (!job) throw new Error('任务不存在');
-  if (job.status !== 'failed') throw new Error('仅失败任务可重试');
+  if (job.status !== 'failed' && job.status !== 'completed') {
+    throw new Error('仅失败或已完成的任务可重试');
+  }
   return queue.publish(job.topic, job.payload);
 }
 

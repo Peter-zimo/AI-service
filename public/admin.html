@@ -332,6 +332,7 @@
           <label style="font-size:12px;color:#6b7280;display:flex;align-items:center;gap:6px;">
             <input type="checkbox" id="jobs-auto" checked onchange="toggleJobsAutoRefresh()"> 自动刷新
           </label>
+          <button class="btn btn-primary" onclick="recomputeEmbeddings()" style="font-size:13px;">🧠 重算向量</button>
           <button class="btn btn-secondary" onclick="loadJobs()" style="font-size:13px;">🔄 刷新</button>
         </div>
       </div>
@@ -977,7 +978,7 @@ async function loadJobs() {
 
     const tbody = document.getElementById('jobs-tbody');
     if (!jobs.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无任务</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:48px 0;color:#9ca3af;font-size:14px;">暂无任务<br><span style="font-size:12px;">点击右上角「重算向量」创建一个任务，或在知识库导入后查看</span></td></tr>';
       return;
     }
 
@@ -991,13 +992,33 @@ async function loadJobs() {
         <td style="font-size:12px;">${jobResultText(job)}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm btn-secondary" onclick="showJobDetail('${esc(job.id)}')">详情</button>
-          ${job.status === 'failed' ? `<button class="btn btn-sm btn-primary" style="margin-left:4px;" onclick="retryJob('${esc(job.id)}')">重试</button>` : ''}
+          ${(job.status === 'failed' || job.status === 'completed') ? `<button class="btn btn-sm btn-primary" style="margin-left:4px;" onclick="retryJob('${esc(job.id)}')">重试</button>` : ''}
           ${job.status === 'waiting' ? `<button class="btn btn-sm btn-secondary" style="margin-left:4px;" onclick="cancelJob('${esc(job.id)}')">取消</button>` : ''}
         </td>
       </tr>
     `).join('');
   } catch (e) {
+    const tbody = document.getElementById('jobs-tbody');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:#dc2626;">加载失败：${esc(e.message)}</td></tr>`;
+    }
     toast('加载任务失败：' + e.message, 'error');
+  }
+}
+
+async function recomputeEmbeddings() {
+  try {
+    const res = await apiFetch(API + '/knowledge/embeddings/recompute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    toast('已提交向量重算任务');
+    loadJobs();
+  } catch (e) {
+    toast('提交失败：' + e.message, 'error');
   }
 }
 
