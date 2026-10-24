@@ -1,14 +1,15 @@
 /**
  * Prometheus 指标收集模块
- * 暴露 /metrics 端点，支持 Grafana 对接
+ * 暴露 /api/metrics 端点（内部 token 鉴权），支持 Prometheus/Grafana 对接
  */
 
-const os = require('os');
+'use strict';
 
 // 计数器
 const counters = {
   http_requests_total: { labels: ['method', 'route', 'status'], values: new Map() },
   chat_messages_total: { labels: ['source'], values: new Map() },
+  ai_requests_total: { labels: [], values: new Map() },
   ai_errors_total: { labels: ['type'], values: new Map() },
   ai_fallback_total: { labels: ['type'], values: new Map() },
 };
@@ -21,7 +22,6 @@ const histograms = {
 // 仪表值
 const gauges = {
   nodejs_heap_used_bytes: () => process.memoryUsage().heapUsed,
-  nodejs_eventloop_lag_ms: 0,
   active_conversations: 0,
   ai_queue_pending: 0,
 };
@@ -40,16 +40,26 @@ function inc(name, labelValues = []) {
 // 记录直方图值
 function observe(name, value, labelValues = []) {
   const key = _key(...labelValues);
-  const map = histograms[name].values;
-  if (!map.has(key)) {
-    map.set(key, histograms[name].buckets.map(() => 0));
+  const histogram = histograms[name];
+  if (!histogram.values.has(key)) {
+    histogram.values.set(key, {
+      bucketCounts: histogram.buckets.map(() => 0),
+      sum: 0,
+      count: 0,
+    });
   }
-  const bucketCounts = map.get(key);
-  const buckets = histograms[name].buckets;
-  for (let i = 0; i < buckets.length; i++) {
-    if (value <= buckets[i]) { bucketCounts[i]++; break; }
-    if (i === buckets.length - 1) bucketCounts[i]++; // +Inf
+
+  const entry = histogram.values.get(key);
+  entry.sum += value;
+  entry.count += 1;
+
+  for (let i = 0; i < histogram.buckets.length; i++) {
+    if (value <= histogram.buckets[i]) {
+      entry.bucketCounts[i]++;
+      return;
+    }
   }
+  // 超过最大桶：只体现在 +Inf / count / sum
 }
 
 // 生成 Prometheus 文本格式
@@ -61,7 +71,7 @@ function toPrometheusText() {
     lines.push(`# HELP ${name} Auto-generated counter`);
     lines.push(`# TYPE ${name} counter`);
     for (const [key, count] of values.entries()) {
-      const parts = key.split('|');
+      const parts = key === '' ? [] : key.split('|');
       const labelStr = labels.map((l, i) => `${l}="${parts[i] || ''}"`).join(',');
       lines.push(`${name}{${labelStr}} ${count}`);
     }
@@ -71,16 +81,18 @@ function toPrometheusText() {
   for (const [name, { labels, buckets, values }] of Object.entries(histograms)) {
     lines.push(`# HELP ${name} Auto-generated histogram`);
     lines.push(`# TYPE ${name} histogram`);
-    for (const [key, bucketCounts] of values.entries()) {
+    for (const [key, entry] of values.entries()) {
       const parts = key.split('|');
       const labelStr = labels.map((l, i) => `${l}="${parts[i] || ''}"`).join(',');
+
       let cumulative = 0;
       for (let i = 0; i < buckets.length; i++) {
-        cumulative += bucketCounts[i];
+        cumulative += entry.bucketCounts[i];
         lines.push(`${name}_bucket{${labelStr},le="${buckets[i]}"} ${cumulative}`);
       }
-      lines.push(`${name}_bucket{${labelStr},le="+Inf"} ${cumulative}`);
-      lines.push(`${name}_count{${labelStr}} ${cumulative}`);
+      lines.push(`${name}_bucket{${labelStr},le="+Inf"} ${entry.count}`);
+      lines.push(`${name}_sum{${labelStr}} ${entry.sum}`);
+      lines.push(`${name}_count{${labelStr}} ${entry.count}`);
     }
   }
 
@@ -93,22 +105,21 @@ function toPrometheusText() {
   lines.push('# TYPE nodejs_uptime_seconds gauge');
   lines.push(`nodejs_uptime_seconds ${((Date.now() - startTime) / 1000).toFixed(1)}`);
 
-  lines.push('# HELP nodejs_eventloop_lag_ms Event loop lag');
-  lines.push('# TYPE nodejs_eventloop_lag_ms gauge');
-  lines.push(`nodejs_eventloop_lag_ms ${gauges.nodejs_eventloop_lag_ms}`);
-
   lines.push('# HELP active_conversations Active conversations');
   lines.push('# TYPE active_conversations gauge');
   lines.push(`active_conversations ${gauges.active_conversations}`);
 
-  // 队列深度：抓取时实时读取（内存后端下即本进程排队数）
+  // 队列积压：抓取时实时读取（waitingCount 不含正在执行的任务）
   try {
     const state = require('./state');
-    gauges.ai_queue_pending = state.queues.pendingCount();
+    const queues = state.queues;
+    gauges.ai_queue_pending = typeof queues.waitingCount === 'function'
+      ? queues.waitingCount()
+      : queues.pendingCount();
   } catch (_) {
     /* 状态层不可用时保持 0 */
   }
-  lines.push('# HELP ai_queue_pending Pending AI tasks in conversation queues');
+  lines.push('# HELP ai_queue_pending Waiting AI tasks (excluding running)');
   lines.push('# TYPE ai_queue_pending gauge');
   lines.push(`ai_queue_pending ${gauges.ai_queue_pending}`);
 

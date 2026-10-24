@@ -31,9 +31,9 @@ groups:
         expr: |
           sum(rate(ai_fallback_total[5m]))
           /
-          clamp_min(sum(rate(chat_messages_total[5m])), 1e-9)
+          clamp_min(sum(rate(ai_requests_total[5m])), 1e-9)
           > 0.2
-        for: 10m
+        for: 5m
         labels:
           severity: warning
         annotations:

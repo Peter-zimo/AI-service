@@ -1,0 +1,25 @@
+# Prometheus 抓取配置（示例）
+#
+# /api/metrics 使用内部服务令牌鉴权（X-Internal-Service-Token），
+# 不再依赖 1 小时过期的 admin JWT。
+#
+# 令牌通过文件挂载读取，避免把密钥写进配置文件：
+#   /etc/prometheus/ai_service_token 内容 = 与 .env 的 AI_SERVICE_TOKEN 相同
+#
+# 若 Prometheus 与 node-service 不在同一 Docker 网络，把 targets 改成实际地址。
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/prometheus-alerts.yml
+
+scrape_configs:
+  - job_name: ai-customer-service
+    metrics_path: /api/metrics
+    static_configs:
+      - targets: ['node-service:3456']
+    http_headers:
+      X-Internal-Service-Token:
+        secrets: ['/etc/prometheus/ai_service_token']

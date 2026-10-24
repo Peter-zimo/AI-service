@@ -270,7 +270,8 @@ function createApp() {
     next();
   });
 
-  app.get('/api/metrics', jwtAuth(['admin']), async (req, res) => {
+  // Prometheus 抓取用：内部 token 鉴权（匿名仍 401），避免依赖 1 小时过期的 JWT
+  app.get('/api/metrics', internalServiceAuth, async (req, res) => {
     res.setHeader('Content-Type', 'text/plain; version=0.0.4');
     res.send(metrics.toPrometheusText());
   });

@@ -105,8 +105,10 @@ function rrfFusion(ftsResults, semanticResults, k = RETRIEVAL.RRF_K) {
 function createRetrieval({ repo, getKnowledgeBase, embedding }) {
   const { localEmbedding, cosineSimilarity, computeEmbedding } = embedding;
 
-  /** FTS5 全文检索 */
+  /** FTS5 全文检索（PG 无 FTS5，直接跳过，避免每次查询抛错刷日志） */
   async function searchFTS5(query) {
+    if (process.env.DB_TYPE === 'postgres') return [];
+
     const match = buildFtsMatchExpression(query);
     if (!match) return [];
 

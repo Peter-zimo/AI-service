@@ -6,10 +6,24 @@
  *   2. 安装了 redis 包（npm i redis）
  *
  * 任一不满足时 createRedisBackend 返回 null，由 index.js 降级到内存后端。
- * 因此本模块不会成为硬依赖，也不会拖垮单机启动。
+ *
+ * 稳定性约束：所有 Redis 操作都带超时。Redis 抖动/不可用时快速失败，
+ * 由上层（stream-registry.getOrFetch 等）降级为 404 或内存行为，避免 SSE 挂死。
  */
 
 'use strict';
+
+const OP_TIMEOUT_MS = 800;
+const CONNECT_TIMEOUT_MS = 3000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} 超时(${ms}ms)`)), ms);
+    if (timer.unref) timer.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 function createRedisBackend(url, { keyPrefix = 'cs:' } = {}) {
   let redis;
@@ -30,8 +44,8 @@ function createRedisBackend(url, { keyPrefix = 'cs:' } = {}) {
   subscriber.on('error', onError('subscriber'));
 
   const ready = (async () => {
-    await client.connect();
-    await subscriber.connect();
+    await withTimeout(client.connect(), CONNECT_TIMEOUT_MS, 'redis connect');
+    await withTimeout(subscriber.connect(), CONNECT_TIMEOUT_MS, 'redis subscriber connect');
     return true;
   })().catch((e) => {
     console.error(`[state:redis] 连接失败，降级为内存后端: ${e.message}`);
@@ -47,25 +61,27 @@ function createRedisBackend(url, { keyPrefix = 'cs:' } = {}) {
 
   async function get(key) {
     await ensure();
-    const raw = await client.get(fullKey(key));
+    const raw = await withTimeout(client.get(fullKey(key)), OP_TIMEOUT_MS, 'redis get');
     return raw === null ? undefined : JSON.parse(raw);
   }
 
   async function set(key, value, ttlMs) {
     await ensure();
     const payload = JSON.stringify(value);
-    if (ttlMs) await client.set(fullKey(key), payload, { PX: ttlMs });
-    else await client.set(fullKey(key), payload);
+    const op = ttlMs
+      ? client.set(fullKey(key), payload, { PX: ttlMs })
+      : client.set(fullKey(key), payload);
+    await withTimeout(op, OP_TIMEOUT_MS, 'redis set');
   }
 
   async function del(key) {
     await ensure();
-    await client.del(fullKey(key));
+    await withTimeout(client.del(fullKey(key)), OP_TIMEOUT_MS, 'redis del');
   }
 
   async function publish(channel, message) {
     await ensure();
-    await client.publish(fullKey(channel), JSON.stringify(message));
+    await withTimeout(client.publish(fullKey(channel), JSON.stringify(message)), OP_TIMEOUT_MS, 'redis publish');
   }
 
   async function subscribe(channel, handler) {
@@ -75,21 +91,25 @@ function createRedisBackend(url, { keyPrefix = 'cs:' } = {}) {
     handlers.get(key).add(handler);
 
     if (handlers.get(key).size === 1) {
-      await subscriber.subscribe(key, (raw) => {
-        let message;
-        try {
-          message = JSON.parse(raw);
-        } catch (_) {
-          return;
-        }
-        for (const h of handlers.get(key) || []) {
+      await withTimeout(
+        subscriber.subscribe(key, (raw) => {
+          let message;
           try {
-            h(message);
+            message = JSON.parse(raw);
           } catch (_) {
-            /* 单个订阅者异常不影响其他订阅者 */
+            return;
           }
-        }
-      });
+          for (const h of handlers.get(key) || []) {
+            try {
+              h(message);
+            } catch (_) {
+              /* 单个订阅者异常不影响其他订阅者 */
+            }
+          }
+        }),
+        OP_TIMEOUT_MS,
+        'redis subscribe'
+      );
     }
 
     return async () => {
@@ -99,7 +119,7 @@ function createRedisBackend(url, { keyPrefix = 'cs:' } = {}) {
       if (set.size === 0) {
         handlers.delete(key);
         try {
-          await subscriber.unsubscribe(key);
+          await withTimeout(subscriber.unsubscribe(key), OP_TIMEOUT_MS, 'redis unsubscribe');
         } catch (_) {
           /* 忽略取消订阅失败 */
         }
@@ -109,12 +129,12 @@ function createRedisBackend(url, { keyPrefix = 'cs:' } = {}) {
 
   async function close() {
     try {
-      await subscriber.quit();
+      await withTimeout(subscriber.quit(), OP_TIMEOUT_MS, 'redis subscriber quit');
     } catch (_) {
       /* 忽略 */
     }
     try {
-      await client.quit();
+      await withTimeout(client.quit(), OP_TIMEOUT_MS, 'redis client quit');
     } catch (_) {
       /* 忽略 */
     }

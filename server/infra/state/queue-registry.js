@@ -15,12 +15,14 @@ const AI_TASK_TIMEOUT_MS = 90 * 1000;
 class QueueRegistry {
   constructor() {
     this.queues = new Map();
+    this.running = 0;
   }
 
   enqueue(conversationId, task) {
     const prev = this.queues.get(conversationId) || Promise.resolve();
 
     const guarded = async () => {
+      this.running += 1;
       let timer;
       const timeout = new Promise((_, reject) => {
         timer = setTimeout(
@@ -34,24 +36,33 @@ class QueueRegistry {
         return await Promise.race([task(), timeout]);
       } finally {
         if (timer) clearTimeout(timer);
+        this.running -= 1;
       }
     };
 
     const next = prev.then(guarded, guarded);
     this.queues.set(conversationId, next);
 
-    next.finally(() => {
+    // 用 then(cleanup, cleanup) 而非 finally：避免派生 promise 的 unhandledRejection
+    const cleanup = () => {
       if (this.queues.get(conversationId) === next) this.queues.delete(conversationId);
-    });
+    };
+    next.then(cleanup, cleanup);
 
-    // 调用方通常不 await（要立刻返回 streamId），挂一个吞掉分支避免 unhandledRejection
+    // 调用方通常不 await（要立刻返回 streamId），挂一个吞掉分支
     next.catch(() => {});
 
     return next;
   }
 
+  /** 当前有队列记录的会话数（含正在执行的） */
   pendingCount() {
     return this.queues.size;
+  }
+
+  /** 真正在等待的任务数（不含正在执行的） */
+  waitingCount() {
+    return Math.max(0, this.queues.size - this.running);
   }
 }
 

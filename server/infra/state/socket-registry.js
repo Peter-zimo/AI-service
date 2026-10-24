@@ -65,13 +65,14 @@ class SocketRegistry {
 
   registerAgent(agentId, ws) {
     this.agentSockets.set(agentId, ws);
-    this.subscribeRemote('agent', agentId, (message) => this.deliver(ws, message));
+    // 按 id 实时查表，避免闭包捕获旧 socket（重连后仍投递给旧连接）
+    this.subscribeRemote('agent', agentId, (message) => this.deliver(this.agentSockets.get(agentId), message));
     console.log(`[人工客服] 客服 ${agentId} WebSocket已连接`);
   }
 
   registerUser(conversationId, ws) {
     this.userSockets.set(conversationId, ws);
-    this.subscribeRemote('user', conversationId, (message) => this.deliver(ws, message));
+    this.subscribeRemote('user', conversationId, (message) => this.deliver(this.userSockets.get(conversationId), message));
     console.log(`[人工客服] 用户 ${conversationId} WebSocket已连接`);
   }
 

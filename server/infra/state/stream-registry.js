@@ -54,6 +54,7 @@ class StreamRegistry {
       ended: false,
       type: null,
       callbacks: new Set(),
+      tokenWrites: 0,
     };
     this.sessions.set(streamId, session);
     this.mirror(() =>
@@ -82,8 +83,13 @@ class StreamRegistry {
         ended: !!meta.ended,
         type: meta.type || null,
         callbacks: new Set(),
+        tokenWrites: 0,
       };
       this.sessions.set(streamId, session);
+
+      const timer = setTimeout(() => this.sessions.delete(streamId), SESSION_TTL_MS);
+      if (timer.unref) timer.unref();
+
       return session;
     } catch (_) {
       return null;
@@ -95,6 +101,7 @@ class StreamRegistry {
     if (!session) return;
 
     session.tokens.push(token);
+    session.tokenWrites = (session.tokenWrites || 0) + 1;
     for (const cb of session.callbacks) cb({ type: 'token', data: token });
 
     this.mirror(() =>
@@ -104,9 +111,12 @@ class StreamRegistry {
         origin: this.instanceId,
       })
     );
-    this.mirror(() =>
-      this.backend.kv.set(`stream:${streamId}:meta`, this.snapshot(session), SESSION_TTL_MS)
-    );
+    // 快照降频：每 20 个 token 落一次，避免 O(n²) 写放大；end/error 时必落
+    if (session.tokenWrites % 20 === 0) {
+      this.mirror(() =>
+        this.backend.kv.set(`stream:${streamId}:meta`, this.snapshot(session), SESSION_TTL_MS)
+      );
+    }
   }
 
   end(streamId, fullContent, type) {
@@ -146,6 +156,14 @@ class StreamRegistry {
         data: errorMsg,
         origin: this.instanceId,
       })
+    );
+    // 错误流也落终态快照，避免重启后被恢复成「未结束」
+    this.mirror(() =>
+      this.backend.kv.set(
+        `stream:${streamId}:meta`,
+        { conversationId: session.conversationId, tokens: session.tokens, ended: true, type: 'error' },
+        ERROR_RETENTION_MS
+      )
     );
 
     const timer = setTimeout(() => this.sessions.delete(streamId), ERROR_RETENTION_MS);

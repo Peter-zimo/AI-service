@@ -26,6 +26,16 @@ const { SocketRegistry } = require('./socket-registry');
 
 const INSTANCE_ID = crypto.randomBytes(6).toString('hex');
 
+function maskRedisUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) parsed.password = '***';
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (_) {
+    return 'redis';
+  }
+}
+
 function createState() {
   let backend = null;
 
@@ -38,7 +48,7 @@ function createState() {
 
   if (!backend) backend = createMemoryBackend();
 
-  console.log(`[state] 状态后端: ${backend.kind}${backend.kind === 'redis' ? ` (${env.redis.url})` : '（单机/测试）'}`);
+  console.log(`[state] 状态后端: ${backend.kind}${backend.kind === 'redis' ? ` (${maskRedisUrl(env.redis.url)})` : '（单机/测试）'}`);
 
   return {
     backend,

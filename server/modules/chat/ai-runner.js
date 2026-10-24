@@ -142,6 +142,7 @@ async function finishWithContent({ conversationId, message, streamId, fullConten
  * 执行一次 AI 回复（在会话队列中调用）
  */
 async function runAgentStream({ conversationId, message, streamId }) {
+  metrics.inc('ai_requests_total');
   try {
     // 熔断期内直接跳过 AI，走知识库兜底
     if (aiStreamClient.isBreakerOpen) {

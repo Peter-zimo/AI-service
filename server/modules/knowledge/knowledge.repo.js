@@ -21,6 +21,9 @@ const VECTOR_DIM = 1024;
 
 function toPgVector(vector) {
   if (!Array.isArray(vector) || vector.length === 0) return null;
+  if (vector.length > VECTOR_DIM) {
+    console.warn(`[知识库] 向量维度 ${vector.length} > ${VECTOR_DIM}，将截断，建议调整 VECTOR_DIM`);
+  }
   const out = new Array(VECTOR_DIM).fill(0);
   const n = Math.min(vector.length, VECTOR_DIM);
   for (let i = 0; i < n; i++) out[i] = Number(vector[i]) || 0;
@@ -73,9 +76,10 @@ function initTable() {
 
 // ============ 查询 ============
 
-/** 当前知识条目总数（迁移判空用，保持同步语义） */
-function count() {
-  return db.prepare('SELECT COUNT(*) as count FROM knowledge').get().count;
+/** 当前知识条目总数（PG 下需 await，SQLite 下 await 同步值同样成立） */
+async function count() {
+  const row = await db.prepare('SELECT COUNT(*) as count FROM knowledge').get();
+  return row ? row.count : 0;
 }
 
 /** 全量读取，按 id 排序 */
@@ -306,7 +310,7 @@ function resetToDefault() {
 /**
  * 首次启动时把 knowledge.json 迁移进数据库（仅当表为空）。
  */
-function migrateFromJSON() {
+async function migrateFromJSON() {
   if (!fs.existsSync(JSON_SEED_PATH)) {
     console.log('[知识库] 无旧JSON数据，初始化默认数据');
     resetToDefault();
@@ -323,7 +327,7 @@ function migrateFromJSON() {
       return;
     }
 
-    if (count() === 0) {
+    if (await count() === 0) {
       const insert = db.prepare(`
         INSERT INTO knowledge (id, question, answer, keywords, embedding, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -331,7 +335,7 @@ function migrateFromJSON() {
       const now = new Date().toISOString();
 
       for (const item of items) {
-        insert.run(item.id, item.question, item.answer,
+        await insert.run(item.id, item.question, item.answer,
           JSON.stringify(item.keywords || []), null, now, now);
       }
 
