@@ -118,6 +118,13 @@ const env = {
     url: str('REDIS_URL'),
     keyPrefix: str('REDIS_KEY_PREFIX', 'cs:'),
   },
+
+  // 异步任务：单机默认内联 worker；生产可设 INLINE_WORKERS=false 并独立跑 node server/worker.js
+  jobs: {
+    inline: bool('INLINE_WORKERS', true),
+    concurrency: num('WORKER_CONCURRENCY', 2),
+    maxAttempts: num('JOB_MAX_ATTEMPTS', 3),
+  },
 };
 
 // ============ 启动校验 ============

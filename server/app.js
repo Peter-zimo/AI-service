@@ -31,6 +31,7 @@ const { requestId } = require('./middleware/request-id');
 const chatRoutes = require('./routes/chat');
 const conversationRoutes = require('./routes/conversations.routes');
 const knowledgeRoutes = require('./routes/knowledge');
+const jobsRoutes = require('./routes/jobs');
 const configRoutes = require('./routes/config');
 const sensitiveRoutes = require('./routes/sensitive');
 const humanRoutes = require('./routes/human');
@@ -313,6 +314,7 @@ function createApp() {
 
   // ---------- 管理 API ----------
   app.use('/api/knowledge', limiters.admin, jwtAuth(['admin', 'agent']), knowledgeRoutes);
+  app.use('/api/jobs', limiters.admin, jwtAuth(['admin']), jobsRoutes);
   app.use('/api/quality', limiters.admin, jwtAuth(['admin']), qualityRoutes);
   app.use('/api/config', limiters.admin, jwtAuth(['admin']), configRoutes.router);
   app.use('/api/sensitive', limiters.admin, jwtAuth(['admin', 'agent']), sensitiveRoutes);
@@ -327,6 +329,11 @@ function createApp() {
   // ---------- 基础设施 ----------
   // 数据库建表在 infra/db 加载时完成；chat 模块加载时会启动会话超时检查
   require('./modules/chat');
+
+  // 异步任务消费者：单机默认内联；生产可设 INLINE_WORKERS=false 并用 node server/worker.js
+  if (env.jobs.inline) {
+    require('./jobs').startWorkers();
+  }
 
   // AI 服务全局引用（供配置同步回调使用；utils/config.js 仍依赖它，B4 收口）
   global.aiService = require('./modules/ai');

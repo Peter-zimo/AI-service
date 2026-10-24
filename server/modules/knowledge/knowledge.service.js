@@ -270,6 +270,27 @@ class KnowledgeService {
   hasEmbeddingAPI() {
     return !!(getConfigValue('deepseek', 'apiKey') || getConfigValue('zhipu', 'apiKey'));
   }
+
+  /**
+   * 重算指定条目（或全量）的向量，供异步任务调用。
+   * @param {string[]|null} ids
+   * @returns {Promise<{total:number, updated:number}>}
+   */
+  async recomputeEmbeddings(ids = null) {
+    await this._ready;
+
+    const targets = Array.isArray(ids) && ids.length > 0
+      ? this.knowledgeBase.filter(item => ids.includes(item.id))
+      : this.knowledgeBase;
+
+    for (const item of targets) item.embedding = null;
+    await this._batchComputeEmbeddingsFor(targets);
+
+    return {
+      total: targets.length,
+      updated: targets.filter(item => item.embedding).length,
+    };
+  }
 }
 
 module.exports = { KnowledgeService };

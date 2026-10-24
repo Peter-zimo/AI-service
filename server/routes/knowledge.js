@@ -243,6 +243,18 @@ router.get('/search/query', async (req, res) => {
   }
 });
 
+// ============ 异步重算向量 ============
+
+router.post('/embeddings/recompute', (req, res) => {
+  try {
+    const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : null;
+    const jobId = require('../jobs').enqueue('knowledge.embedding', { ids });
+    res.json({ success: true, jobId, statusUrl: `/api/jobs/${jobId}` });
+  } catch (error) {
+    guard(res, error, '提交向量重算任务失败', '提交任务失败');
+  }
+});
+
 // ============ 单条查询（通配符路由必须最后） ============
 
 router.get('/:id', async (req, res) => {
