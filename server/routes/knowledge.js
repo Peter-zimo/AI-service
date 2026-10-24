@@ -227,13 +227,17 @@ router.get('/search/query', async (req, res) => {
       return res.status(400).json({ success: false, error: '缺少搜索关键词' });
     }
 
-    const results = await knowledgeService.search(q);
+    const remote = await knowledgeService.searchRemote(q);
+    const results = remote.ok ? remote.results : await knowledgeService.search(q);
     res.json({
       success: true,
       query: q,
       results,
       hybrid: true,
-      note: '混合检索（FTS5 + 语义向量 + RRF）',
+      source: remote.ok ? 'python' : 'node-fallback',
+      note: remote.ok
+        ? 'Python 检索（BM25 + BGE 512 + RRF）'
+        : 'Python 不可用，使用本地降级检索',
     });
   } catch (error) {
     guard(res, error, '搜索失败', '搜索失败');

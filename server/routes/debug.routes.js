@@ -22,11 +22,13 @@ router.get('/dir', async (req, res) => {
 router.get('/knowledge', async (req, res) => {
   const knowledgeService = require('../modules/knowledge');
   const testQuery = req.query.q || '工作时间';
-  const results = await knowledgeService.search(testQuery);
+  const remote = await knowledgeService.searchRemote(testQuery);
+  const results = remote.ok ? remote.results : await knowledgeService.search(testQuery);
 
   res.json({
     totalItems: knowledgeService.knowledgeBase.length,
     testQuery,
+    searchSource: remote.ok ? 'python' : 'node-fallback',
     searchResults: results.map(r => ({
       question: r.question,
       score: r.score,

@@ -175,6 +175,7 @@ async function runAgentStream({ conversationId, message, streamId }) {
     let fallbackType = 'fallback';
 
     try {
+      // Python 不可达时的降级检索：使用本地实现；主检索由 Python 提供
       const kbMatch = await knowledgeService.getBestMatch(message);
       if (kbMatch) {
         fallbackAnswer = kbMatch.answer;

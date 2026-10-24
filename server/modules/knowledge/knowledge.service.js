@@ -11,6 +11,8 @@
 
 const { RETRIEVAL } = require('../../config/constants');
 const { getConfigValue } = require('../../config/ai-keys');
+const { env } = require('../../config');
+const langchain = require('../../infra/clients/langchain');
 const repo = require('./knowledge.repo');
 const embedding = require('./embedding');
 const { extractKeywords } = require('./keywords');
@@ -18,6 +20,16 @@ const { createRetrieval } = require('./retrieval');
 
 const BATCH_DELAY_MS = RETRIEVAL.EMBEDDING_BATCH_DELAY_MS;
 const MAX_AUTO_KEYWORDS = 10;
+
+/** 远程调用加超时：Python 抖动时快速回退本地，不拖住请求 */
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}超时(${ms}ms)`)), ms);
+    if (timer.unref) timer.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 class KnowledgeService {
   constructor() {
@@ -96,6 +108,48 @@ class KnowledgeService {
   async getBestMatch(query) {
     await this._ready;
     return this._retrieval.getBestMatch(query);
+  }
+
+  // ============ 远程检索（Python 为唯一权威） ============
+
+  /**
+   * 远程检索。ok=false 表示 Python 不可用，调用方应回退本地。
+   * @returns {Promise<{ok:boolean, results?:Array}>}
+   */
+  async searchRemote(query) {
+    if (!env.knowledge.remoteFirst) return { ok: false };
+
+    try {
+      const res = await withTimeout(
+        langchain.searchKnowledge(query),
+        env.knowledge.remoteTimeoutMs,
+        '远程检索'
+      );
+      if (!res || res.success !== true) return { ok: false };
+      return { ok: true, results: Array.isArray(res.data) ? res.data : [] };
+    } catch (_) {
+      return { ok: false };
+    }
+  }
+
+  /**
+   * 远程最佳匹配。ok=true 且 match=null 表示「确实没有匹配」，调用方不应再用本地兜底。
+   * @returns {Promise<{ok:boolean, match?:object|null}>}
+   */
+  async getBestMatchRemote(query) {
+    if (!env.knowledge.remoteFirst) return { ok: false };
+
+    try {
+      const res = await withTimeout(
+        langchain.getBestMatch(query),
+        env.knowledge.remoteTimeoutMs,
+        '远程最佳匹配'
+      );
+      if (!res || res.success !== true) return { ok: false };
+      return { ok: true, match: res.data || null };
+    } catch (_) {
+      return { ok: false };
+    }
   }
 
   // ============ 读 ============

@@ -125,6 +125,13 @@ const env = {
     concurrency: num('WORKER_CONCURRENCY', 2),
     maxAttempts: num('JOB_MAX_ATTEMPTS', 3),
   },
+
+  // 检索：Python 为唯一权威；Node 仅在远程不可达时降级
+  knowledge: {
+    remoteFirst: bool('KNOWLEDGE_REMOTE_FIRST', true),
+    // 首次检索可能触发 BGE 冷启动（约 3s），默认给 5s；预热后通常 <50ms
+    remoteTimeoutMs: num('KNOWLEDGE_REMOTE_TIMEOUT_MS', 5000),
+  },
 };
 
 // ============ 启动校验 ============

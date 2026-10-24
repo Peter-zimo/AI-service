@@ -80,8 +80,9 @@ class AIService {
   // ============ 对话 ============
 
   async chat(conversationId, userMessage) {
-    // 1. 知识库检索
-    const bestMatch = await knowledgeService.getBestMatch(userMessage);
+    // 1. 知识库检索：Python 为权威；不可达时才用本地降级
+    const remote = await knowledgeService.getBestMatchRemote(userMessage);
+    const bestMatch = remote.ok ? remote.match : await knowledgeService.getBestMatch(userMessage);
 
     let knowledgeMatches = [];
     if (bestMatch) {
