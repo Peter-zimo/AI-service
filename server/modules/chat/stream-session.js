@@ -1,77 +1,41 @@
 /**
- * SSE 流式会话注册表
+ * SSE 流式会话注册表（HTTP 适配层）
  *
- * 一条用户消息对应一个 streamId。AI 在后台逐 token 产出，
- * 前端拿到 streamId 后连 /stream/:streamId 逐块接收。
- *
- * 设计要点：
- * - 前端可能晚于 AI 开始连接，所以 token 要缓冲、可重放
- * - 流结束后保留 5 分钟，供重连；错误流保留 60 秒
+ * 状态本身在 infra/state/stream-registry，本文件只负责把状态映射成 SSE 响应。
+ * 这样单机内存与 Redis 两种后端共用同一套 HTTP 行为。
  */
 
 'use strict';
 
-const END_RETENTION_MS = 5 * 60 * 1000;
-const ERROR_RETENTION_MS = 60 * 1000;
-
-/** streamId -> { conversationId, tokens, fullContent, ended, callbacks } */
-const sessions = new Map();
+const state = require('../../infra/state');
 
 function createSession(streamId, conversationId) {
-  sessions.set(streamId, {
-    conversationId,
-    tokens: [],
-    fullContent: '',
-    ended: false,
-    callbacks: new Set(),
-  });
-  return sessions.get(streamId);
+  return state.streams.create(streamId, conversationId);
 }
 
 function getSession(streamId) {
-  return sessions.get(streamId) || null;
+  return state.streams.get(streamId);
 }
 
-/** 追加一个 token 并广播给已连接的客户端 */
 function writeToken(streamId, token) {
-  const session = sessions.get(streamId);
-  if (!session) return;
-  session.tokens.push(token);
-  session.callbacks.forEach(cb => cb({ type: 'token', data: token }));
+  state.streams.writeToken(streamId, token);
 }
 
-/**
- * 正常结束
- * @param {string} streamId
- * @param {string} fullContent 完整回答
- * @param {string} type 来源：ai / knowledge / fallback / knowledge-fallback
- */
 function endStream(streamId, fullContent, type) {
-  const session = sessions.get(streamId);
-  if (!session) return;
-  session.ended = true;
-  session.fullContent = fullContent;
-  session.type = type; // 供迟到重连时还原真实来源（历史遗留：此前未赋值，重连恒为 'ai'）
-  session.callbacks.forEach(cb => cb({ type: 'end', data: { fullContent, type } }));
-  setTimeout(() => sessions.delete(streamId), END_RETENTION_MS);
+  state.streams.end(streamId, fullContent, type);
 }
 
-/** 异常结束 */
 function errorStream(streamId, errorMsg) {
-  const session = sessions.get(streamId);
-  if (!session) return;
-  session.ended = true;
-  session.callbacks.forEach(cb => cb({ type: 'error', data: errorMsg }));
-  setTimeout(() => sessions.delete(streamId), ERROR_RETENTION_MS);
+  state.streams.error(streamId, errorMsg);
 }
 
 /**
  * 把 SSE 响应接到某个流会话上。
  * 已缓冲的 token 先重放，未结束则注册回调继续推送。
- * @returns {boolean} false 表示会话不存在（调用方应回 404）
+ * @returns {Promise<boolean>} false 表示会话不存在（调用方应回 404）
  */
-function attachSse(res, streamId, req) {
-  const session = sessions.get(streamId);
+async function attachSse(res, streamId, req) {
+  const session = await state.streams.getOrFetch(streamId);
   if (!session) return false;
 
   res.writeHead(200, {
@@ -108,10 +72,12 @@ function attachSse(res, streamId, req) {
     }
   };
 
-  session.callbacks.add(callback);
+  const unsubscribeLocal = state.streams.subscribe(streamId, callback);
+  const unsubscribeRemote = await state.streams.subscribeRemote(streamId, callback);
 
   req.on('close', () => {
-    session.callbacks.delete(callback);
+    unsubscribeLocal();
+    if (typeof unsubscribeRemote === 'function') unsubscribeRemote();
   });
 
   return true;

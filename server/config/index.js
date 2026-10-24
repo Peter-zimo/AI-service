@@ -112,6 +112,12 @@ const env = {
   quality: {
     auditDbPath: str('QUALITY_AUDIT_DB_PATH'),
   },
+
+  // 状态层后端：配置 REDIS_URL 即启用 Redis（需 npm i redis），否则内存后端
+  redis: {
+    url: str('REDIS_URL'),
+    keyPrefix: str('REDIS_KEY_PREFIX', 'cs:'),
+  },
 };
 
 // ============ 启动校验 ============

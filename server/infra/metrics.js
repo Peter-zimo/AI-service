@@ -10,6 +10,7 @@ const counters = {
   http_requests_total: { labels: ['method', 'route', 'status'], values: new Map() },
   chat_messages_total: { labels: ['source'], values: new Map() },
   ai_errors_total: { labels: ['type'], values: new Map() },
+  ai_fallback_total: { labels: ['type'], values: new Map() },
 };
 
 // 直方图（分桶）
@@ -22,6 +23,7 @@ const gauges = {
   nodejs_heap_used_bytes: () => process.memoryUsage().heapUsed,
   nodejs_eventloop_lag_ms: 0,
   active_conversations: 0,
+  ai_queue_pending: 0,
 };
 
 const startTime = Date.now();
@@ -91,11 +93,31 @@ function toPrometheusText() {
   lines.push('# TYPE nodejs_uptime_seconds gauge');
   lines.push(`nodejs_uptime_seconds ${((Date.now() - startTime) / 1000).toFixed(1)}`);
 
+  lines.push('# HELP nodejs_eventloop_lag_ms Event loop lag');
+  lines.push('# TYPE nodejs_eventloop_lag_ms gauge');
+  lines.push(`nodejs_eventloop_lag_ms ${gauges.nodejs_eventloop_lag_ms}`);
+
   lines.push('# HELP active_conversations Active conversations');
   lines.push('# TYPE active_conversations gauge');
   lines.push(`active_conversations ${gauges.active_conversations}`);
 
+  // 队列深度：抓取时实时读取（内存后端下即本进程排队数）
+  try {
+    const state = require('./state');
+    gauges.ai_queue_pending = state.queues.pendingCount();
+  } catch (_) {
+    /* 状态层不可用时保持 0 */
+  }
+  lines.push('# HELP ai_queue_pending Pending AI tasks in conversation queues');
+  lines.push('# TYPE ai_queue_pending gauge');
+  lines.push(`ai_queue_pending ${gauges.ai_queue_pending}`);
+
   return lines.join('\n') + '\n';
 }
 
-module.exports = { inc, observe, toPrometheusText, gauges, startTime };
+/** 手动设置仪表值（供业务侧上报，如活跃会话数） */
+function setGauge(name, value) {
+  gauges[name] = value;
+}
+
+module.exports = { inc, observe, setGauge, toPrometheusText, gauges, startTime };

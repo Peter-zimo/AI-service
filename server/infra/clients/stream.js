@@ -7,6 +7,7 @@
  */
 
 const { AiTimeoutError, withTimeout, CircuitBreaker } = require('../../utils/withTimeout');
+const requestContext = require('../request-context');
 
 class AiStreamClient {
   /**
@@ -70,7 +71,11 @@ class AiStreamClient {
     try {
       response = await this._fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.serviceToken ? { 'X-Internal-Service-Token': this.serviceToken } : {}) },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.serviceToken ? { 'X-Internal-Service-Token': this.serviceToken } : {}),
+          ...(requestContext.getRequestId() ? { 'X-Request-Id': requestContext.getRequestId() } : {}),
+        },
         body: JSON.stringify({ conversation_id: conversationId, message, use_agent: useAgent }),
         signal: controller.signal,
       });
@@ -110,7 +115,11 @@ class AiStreamClient {
       url,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(this.serviceToken ? { 'X-Internal-Service-Token': this.serviceToken } : {}) },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.serviceToken ? { 'X-Internal-Service-Token': this.serviceToken } : {}),
+          ...(requestContext.getRequestId() ? { 'X-Request-Id': requestContext.getRequestId() } : {}),
+        },
         body: JSON.stringify({ text }),
       },
       this.sensitiveTimeoutMs

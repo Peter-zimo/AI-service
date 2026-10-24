@@ -171,6 +171,19 @@ async function ensureSchema() {
   for (const sql of statements) {
     await pool.query(sql);
   }
+
+  // pgvector（可选）：扩展 / 列 / 索引均幂等；失败只降级，不影响启动
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+    await pool.query('ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS embedding_vec vector(1024)');
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_knowledge_embedding_vec ON knowledge USING hnsw (embedding_vec vector_cosine_ops)'
+    );
+    console.log('[PG] pgvector 就绪');
+  } catch (e) {
+    console.warn('[PG] pgvector 不可用，向量检索回退 JS 余弦:', e.message);
+  }
+
   console.log('[PG] 数据库表初始化完成');
 }
 

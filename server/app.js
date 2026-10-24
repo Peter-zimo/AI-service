@@ -25,6 +25,7 @@ const { isAllowedOrigin } = require('./utils/cors');
 const { env } = require('./config');
 const { isValidVisitorId } = require('./utils/visitor-id');
 const { errorHandler } = require('./middleware/error-handler');
+const { requestId } = require('./middleware/request-id');
 
 // ============ 路由 ============
 const chatRoutes = require('./routes/chat');
@@ -210,6 +211,9 @@ function createApp() {
   const app = express();
   const server = http.createServer(app);
   const limiters = createLimiters();
+
+  // ---------- 请求上下文（必须最先，后续日志都带 requestId） ----------
+  app.use(requestId);
 
   // ---------- 安全中间件 ----------
   app.use(helmet(helmetOptions));

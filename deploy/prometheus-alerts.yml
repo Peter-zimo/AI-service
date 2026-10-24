@@ -1,0 +1,50 @@
+groups:
+  - name: ai-customer-service
+    rules:
+      - alert: HighHttpErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total[5m])), 1e-9)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx 错误率超过 5%"
+          description: "最近 5 分钟 5xx 占比 {{ $value | humanizePercentage }}。"
+
+      - alert: HighHttpLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_ms_bucket[5m])) by (le)
+          ) > 3000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP P95 超过 3s"
+          description: "最近 5 分钟 P95 延迟 {{ $value }}ms。"
+
+      - alert: HighAiFallbackRate
+        expr: |
+          sum(rate(ai_fallback_total[5m]))
+          /
+          clamp_min(sum(rate(chat_messages_total[5m])), 1e-9)
+          > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI 降级率超过 20%"
+          description: "最近 5 分钟降级占比 {{ $value | humanizePercentage }}，请检查 LLM Key 与 Python 引擎。"
+
+      - alert: AiQueueBacklog
+        expr: ai_queue_pending > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI 队列积压超过 50"
+          description: "当前排队任务 {{ $value }}，可能存在模型超时或下游阻塞。"

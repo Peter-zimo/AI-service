@@ -10,14 +10,23 @@
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
+const context = require('./request-context');
 
 const logsDir = path.join(__dirname, '../../logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
+// 每条日志自动带上当前请求的 requestId（无上下文时跳过）
+const injectContext = winston.format((info) => {
+  const requestId = context.getRequestId();
+  if (requestId) info.requestId = requestId;
+  return info;
+});
+
 // 结构化 JSON 格式（生产/文件）
 const jsonFormat = winston.format.combine(
+  injectContext(),
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
   winston.format.json()
@@ -47,6 +56,7 @@ const logger = winston.createLogger({
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
     format: winston.format.combine(
+      injectContext(),
       winston.format.colorize(),
       winston.format.timestamp({ format: 'HH:mm:ss' }),
       winston.format.printf(({ timestamp, level, message, ...meta }) => {

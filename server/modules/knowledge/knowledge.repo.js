@@ -16,6 +16,17 @@ const { defaultKnowledge } = require('./defaults');
 const IS_PG = () => process.env.DB_TYPE === 'postgres';
 const JSON_SEED_PATH = path.join(__dirname, '../../data/knowledge.json');
 
+// pgvector 固定维度：短向量零填充（余弦相似度不变），覆盖 128/512/1024 三种来源
+const VECTOR_DIM = 1024;
+
+function toPgVector(vector) {
+  if (!Array.isArray(vector) || vector.length === 0) return null;
+  const out = new Array(VECTOR_DIM).fill(0);
+  const n = Math.min(vector.length, VECTOR_DIM);
+  for (let i = 0; i < n; i++) out[i] = Number(vector[i]) || 0;
+  return '[' + out.join(',') + ']';
+}
+
 // ============ 表结构 ============
 
 /**
@@ -53,6 +64,11 @@ function initTable() {
   }
 
   console.log('[知识库] 数据库表初始化完成');
+
+  // PG：把已有 embedding(TEXT) 回填到 embedding_vec（幂等，后台执行）
+  if (IS_PG()) {
+    backfillVectors().catch(e => console.error('[知识库] pgvector 回填异常:', e.message));
+  }
 }
 
 // ============ 查询 ============
@@ -81,22 +97,38 @@ async function findById(id) {
 async function replaceAll(items) {
   await db.exec('DELETE FROM knowledge');
 
-  const insert = db.prepare(`
-    INSERT INTO knowledge (id, question, answer, keywords, embedding, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+  const pg = IS_PG();
+  const insert = db.prepare(pg
+    ? `INSERT INTO knowledge (id, question, answer, keywords, embedding, embedding_vec, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?::vector, ?, ?)`
+    : `INSERT INTO knowledge (id, question, answer, keywords, embedding, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`);
   const now = new Date().toISOString();
 
   for (const item of items) {
-    await insert.run(
-      item.id,
-      item.question,
-      item.answer,
-      JSON.stringify(item.keywords || []),
-      item.embedding ? JSON.stringify(item.embedding) : null,
-      now,
-      now
-    );
+    const embeddingText = item.embedding ? JSON.stringify(item.embedding) : null;
+    if (pg) {
+      await insert.run(
+        item.id,
+        item.question,
+        item.answer,
+        JSON.stringify(item.keywords || []),
+        embeddingText,
+        toPgVector(item.embedding),
+        now,
+        now
+      );
+    } else {
+      await insert.run(
+        item.id,
+        item.question,
+        item.answer,
+        JSON.stringify(item.keywords || []),
+        embeddingText,
+        now,
+        now
+      );
+    }
   }
 
   rebuildFts();
@@ -104,8 +136,84 @@ async function replaceAll(items) {
 
 /** 更新单条向量 */
 async function updateEmbedding(id, vector) {
+  if (IS_PG()) {
+    await db.prepare('UPDATE knowledge SET embedding = ?, embedding_vec = ?::vector WHERE id = ?')
+      .run(JSON.stringify(vector), toPgVector(vector), id);
+    return;
+  }
   await db.prepare('UPDATE knowledge SET embedding = ? WHERE id = ?')
     .run(JSON.stringify(vector), id);
+}
+
+/**
+ * PG：把已有 embedding(TEXT) 回填到 embedding_vec（幂等）
+ * @returns {Promise<number>} 回填条数
+ */
+async function backfillVectors() {
+  if (!IS_PG()) return 0;
+  try {
+    const rows = await db.prepare(
+      'SELECT id, embedding FROM knowledge WHERE embedding IS NOT NULL AND embedding_vec IS NULL'
+    ).all();
+
+    let done = 0;
+    for (const row of rows) {
+      let vec;
+      try {
+        vec = JSON.parse(row.embedding);
+      } catch (_) {
+        continue;
+      }
+      const literal = toPgVector(vec);
+      if (!literal) continue;
+      await db.prepare('UPDATE knowledge SET embedding_vec = ?::vector WHERE id = ?')
+        .run(literal, row.id);
+      done++;
+    }
+
+    if (done > 0) console.log(`[知识库] pgvector 回填 ${done} 条`);
+    return done;
+  } catch (e) {
+    console.error('[知识库] pgvector 回填失败:', e.message);
+    return 0;
+  }
+}
+
+/**
+ * 向量检索（PG + pgvector）。不可用时返回 null，调用方回退 JS 余弦。
+ * @param {number[]} queryVec
+ * @param {number} limit
+ * @returns {Promise<Array|null>}
+ */
+async function searchByVector(queryVec, limit = 5) {
+  if (!IS_PG()) return null;
+
+  const literal = toPgVector(queryVec);
+  if (!literal) return null;
+
+  try {
+    const rows = await db.prepare(`
+      SELECT id, question, answer, keywords,
+             1 - (embedding_vec <=> ?::vector) AS score
+      FROM knowledge
+      WHERE embedding_vec IS NOT NULL
+      ORDER BY embedding_vec <=> ?::vector
+      LIMIT ?
+    `).all(literal, literal, limit);
+
+    return rows.map(r => ({
+      id: r.id,
+      question: r.question,
+      answer: r.answer,
+      keywords: JSON.parse(r.keywords || '[]'),
+      embedding: null,
+      score: Math.round(Number(r.score) * 10000) / 10000,
+      _semanticScore: true,
+    }));
+  } catch (e) {
+    console.error('[知识库] pgvector 检索失败:', e.message);
+    return null;
+  }
 }
 
 // ============ FTS5 索引 ============
@@ -243,6 +351,9 @@ module.exports = {
   findById,
   replaceAll,
   updateEmbedding,
+  backfillVectors,
+  searchByVector,
+  toPgVector,
   rebuildFts,
   searchFts,
   resetToDefault,

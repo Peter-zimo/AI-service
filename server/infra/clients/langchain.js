@@ -4,6 +4,7 @@
  */
 
 const http = require('http');
+const requestContext = require('../request-context');
 
 const LANGCHAIN_SERVICE = process.env.LANGCHAIN_SERVICE_URL || 'http://localhost:8000';
 const AI_SERVICE_TOKEN = process.env.AI_SERVICE_TOKEN || '';
@@ -32,6 +33,7 @@ function request(method, path, body = null, serviceUrl = LANGCHAIN_SERVICE) {
       headers: {
         'Content-Type': 'application/json',
         ...(AI_SERVICE_TOKEN ? { 'X-Internal-Service-Token': AI_SERVICE_TOKEN } : {}),
+        ...(requestContext.getRequestId() ? { 'X-Request-Id': requestContext.getRequestId() } : {}),
         ...(postData ? { 'Content-Length': Buffer.byteLength(postData) } : {}),
       },
       timeout: 30000,

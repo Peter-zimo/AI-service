@@ -127,6 +127,9 @@ async function finishWithContent({ conversationId, message, streamId, fullConten
   await stats.incrementAiHandled();
   streamSession.endStream(streamId, finalContent, finalSource);
   metrics.inc('chat_messages_total', [finalSource]);
+  if (finalSource === 'fallback' || finalSource === 'knowledge-fallback') {
+    metrics.inc('ai_fallback_total', [finalSource]);
+  }
 
   if (finalSource === 'fallback') {
     try { await unansweredService.recordQuery(message); } catch (e) { /* 闭环记录失败不影响回复 */ }
@@ -158,6 +161,7 @@ async function runAgentStream({ conversationId, message, streamId }) {
     await messageRepo.add(uuidv4(), conversationId, 'assistant', FALLBACK_TEXT, null, 'fallback');
     await stats.incrementAiHandled();
     streamSession.endStream(streamId, FALLBACK_TEXT, 'fallback');
+    metrics.inc('ai_fallback_total', ['fallback']);
     try { await unansweredService.recordQuery(message); } catch (e) { /* 忽略 */ }
 
   } catch (err) {
@@ -183,6 +187,7 @@ async function runAgentStream({ conversationId, message, streamId }) {
     await messageRepo.add(uuidv4(), conversationId, 'assistant', fallbackAnswer, null, fallbackType);
     await stats.incrementAiHandled();
     streamSession.endStream(streamId, fallbackAnswer, fallbackType);
+    metrics.inc('ai_fallback_total', [fallbackType]);
     try { await unansweredService.recordQuery(message); } catch (e) { /* 忽略 */ }
   }
 }

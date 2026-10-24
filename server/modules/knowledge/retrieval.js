@@ -144,6 +144,16 @@ function createRetrieval({ repo, getKnowledgeBase, embedding }) {
     const queryVec = await computeEmbedding(query);
     if (!queryVec) return [];
 
+    // PG + pgvector：交给数据库做 ANN 检索；无结果时回退 JS 余弦
+    if (typeof repo.searchByVector === 'function') {
+      const vectorResults = await repo.searchByVector(queryVec, RETRIEVAL.SEMANTIC_LIMIT);
+      if (Array.isArray(vectorResults) && vectorResults.length > 0) {
+        return vectorResults
+          .filter(k => k.score > RETRIEVAL.REMOTE_SEMANTIC_THRESHOLD)
+          .slice(0, RETRIEVAL.SEMANTIC_LIMIT);
+      }
+    }
+
     return knowledgeBase
       .filter(k => k.embedding)
       .map(k => ({

@@ -138,7 +138,7 @@ router.get('/export/:format', jwtAuth(['admin', 'agent']), async (req, res) => {
 // ============ SSE 流式接收 ============
 // 前端收到 { type: 'streaming', streamId } 后连接此端点，逐 token 接收 AI 回答
 router.get('/stream/:streamId', async (req, res) => {
-  const attached = chat.attachSse(res, req.params.streamId, req);
+  const attached = await chat.attachSse(res, req.params.streamId, req);
   if (!attached) {
     return res.status(404).json({ success: false, error: '流式会话不存在或已过期' });
   }
