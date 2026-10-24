@@ -111,6 +111,7 @@
       <div class="nav-section">系统设置</div>
       <button class="nav-item" id="nav-brand" onclick="switchTab('brand')">🎨 品牌设置</button>
       <button class="nav-item" id="nav-sensitive" onclick="switchTab('sensitive')">🚫 敏感词管理</button>
+      <button class="nav-item" id="nav-jobs" onclick="switchTab('jobs')">🧩 任务中心</button>
       <button class="nav-item" id="nav-settings" onclick="switchTab('settings')">⚙️ 系统设置</button>
     </nav>
     <div class="sidebar-footer">
@@ -321,6 +322,60 @@
       <div class="card"><div class="card-title">评测运行记录</div><div id="quality-runs" class="empty">加载中...</div></div>
       <div class="card"><div class="card-title">Badcase（选择一次运行后查看）</div><div id="quality-cases" class="empty">请先选择运行记录</div></div>
       <div class="card"><div class="card-title">真实问题候选池</div><div id="quality-candidates" class="empty">加载中...</div></div>
+    </div>
+
+    <!-- ===== 任务中心 ===== -->
+    <div id="tab-jobs" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <div class="page-title" style="margin:0">🧩 任务中心</div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <label style="font-size:12px;color:#6b7280;display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" id="jobs-auto" checked onchange="toggleJobsAutoRefresh()"> 自动刷新
+          </label>
+          <button class="btn btn-secondary" onclick="loadJobs()" style="font-size:13px;">🔄 刷新</button>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px;">
+        <div class="stat-card"><div class="stat-label">等待</div><div id="jobs-waiting" class="stat-value stat-amber">—</div></div>
+        <div class="stat-card"><div class="stat-label">执行中</div><div id="jobs-active" class="stat-value stat-blue">—</div></div>
+        <div class="stat-card"><div class="stat-label">已完成</div><div id="jobs-completed" class="stat-value stat-green">—</div></div>
+        <div class="stat-card"><div class="stat-label">失败</div><div id="jobs-failed" class="stat-value" style="color:#dc2626;">—</div></div>
+        <div class="stat-card"><div class="stat-label">总计</div><div id="jobs-total" class="stat-value stat-gray">—</div></div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;padding:16px 20px;">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <select id="jobs-type-filter" class="input" style="max-width:220px;" onchange="loadJobs()">
+            <option value="">全部类型</option>
+            <option value="knowledge.import">知识库导入</option>
+            <option value="knowledge.embedding">向量重算</option>
+            <option value="quality.evaluate">质量评估</option>
+          </select>
+          <select id="jobs-status-filter" class="input" style="max-width:160px;" onchange="loadJobs()">
+            <option value="">全部状态</option>
+            <option value="waiting">等待</option>
+            <option value="active">执行中</option>
+            <option value="completed">已完成</option>
+            <option value="failed">失败</option>
+          </select>
+          <span id="jobs-updated-at" style="font-size:12px;color:#9ca3af;margin-left:auto;">—</span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:20%">任务</th>
+            <th style="width:16%">类型</th>
+            <th style="width:10%">状态</th>
+            <th style="width:8%">尝试</th>
+            <th style="width:16%">创建时间</th>
+            <th style="width:30%">结果 / 错误</th>
+          </tr></thead>
+          <tbody id="jobs-tbody"><tr><td colspan="6" class="loading">加载中</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ===== 敏感词管理 ===== -->
@@ -835,6 +890,126 @@ function switchTab(name) {
   if (name === 'quality') loadQualityReview();
   if (name === 'brand') loadBrandConfig();
   if (name === 'sensitive') loadSensitiveWords();
+  if (name === 'jobs') {
+    loadJobs();
+    if (document.getElementById('jobs-auto').checked) startJobsAutoRefresh();
+  } else {
+    stopJobsAutoRefresh();
+  }
+}
+
+/* ===== 任务中心 ===== */
+let jobsTimer = null;
+
+function jobStatusBadge(status) {
+  const map = {
+    waiting: ['#fef3c7', '#b45309', '等待'],
+    active: ['#dbeafe', '#1d4ed8', '执行中'],
+    completed: ['#dcfce7', '#15803d', '已完成'],
+    failed: ['#fee2e2', '#b91c1c', '失败'],
+  };
+  const item = map[status] || ['#f3f4f6', '#6b7280', status || '未知'];
+  return `<span style="background:${item[0]};color:${item[1]};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;">${item[2]}</span>`;
+}
+
+function fmtJobTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('zh-CN', { hour12: false });
+}
+
+function jobResultText(job) {
+  if (job.status === 'failed') {
+    return `<span style="color:#b91c1c;">${esc(job.error || '失败')}</span>`;
+  }
+  if (!job.result) return '<span style="color:#9ca3af;">—</span>';
+
+  const r = job.result;
+  const parts = [];
+  if (r.added !== undefined) parts.push(`新增 ${r.added}`);
+  if (r.skipped !== undefined) parts.push(`跳过 ${r.skipped}`);
+  if (r.total !== undefined) parts.push(`总数 ${r.total}`);
+  if (r.updated !== undefined) parts.push(`更新 ${r.updated}`);
+  if (r.passed !== undefined && r.total !== undefined) parts.push(`通过 ${r.passed}/${r.total}`);
+  return esc(parts.length ? parts.join(' · ') : JSON.stringify(r).slice(0, 100));
+}
+
+async function loadJobs() {
+  try {
+    const type = document.getElementById('jobs-type-filter').value;
+    const status = document.getElementById('jobs-status-filter').value;
+    const params = new URLSearchParams({ limit: '50' });
+    if (type) params.set('type', type);
+    if (status) params.set('status', status);
+
+    const [statsRes, listRes] = await Promise.all([
+      apiFetch('/api/jobs/stats'),
+      apiFetch('/api/jobs?' + params.toString()),
+    ]);
+    const stats = (await statsRes.json()).data || {};
+    const jobs = (await listRes.json()).data || [];
+
+    document.getElementById('jobs-waiting').textContent = stats.waiting ?? 0;
+    document.getElementById('jobs-active').textContent = stats.active ?? 0;
+    document.getElementById('jobs-completed').textContent = stats.completed ?? 0;
+    document.getElementById('jobs-failed').textContent = stats.failed ?? 0;
+    document.getElementById('jobs-total').textContent = stats.total ?? 0;
+    document.getElementById('jobs-updated-at').textContent =
+      '更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour12: false });
+
+    const tbody = document.getElementById('jobs-tbody');
+    if (!jobs.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="loading">暂无任务</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = jobs.map(job => `
+      <tr>
+        <td style="font-family:monospace;font-size:12px;color:#6b7280;" title="${esc(job.id)}">${esc(String(job.id).slice(0, 8))}…</td>
+        <td style="font-size:12px;">${esc(job.topic)}</td>
+        <td>${jobStatusBadge(job.status)}</td>
+        <td style="text-align:center;font-size:12px;">${job.attempts || 0}</td>
+        <td style="font-size:12px;color:#6b7280;">${fmtJobTime(job.createdAt)}</td>
+        <td style="font-size:12px;">${jobResultText(job)}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    toast('加载任务失败：' + e.message, 'error');
+  }
+}
+
+function toggleJobsAutoRefresh() {
+  if (document.getElementById('jobs-auto').checked) startJobsAutoRefresh();
+  else stopJobsAutoRefresh();
+}
+
+function startJobsAutoRefresh() {
+  stopJobsAutoRefresh();
+  jobsTimer = setInterval(() => {
+    if (document.getElementById('tab-jobs').classList.contains('active')) loadJobs();
+  }, 5000);
+}
+
+function stopJobsAutoRefresh() {
+  if (jobsTimer) {
+    clearInterval(jobsTimer);
+    jobsTimer = null;
+  }
+}
+
+async function pollJob(jobId, { intervalMs = 1000, timeoutMs = 90000, onTick } = {}) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const res = await apiFetch('/api/jobs/' + encodeURIComponent(jobId));
+    if (res.status === 404) throw new Error('任务不存在');
+    if (!res.ok) throw new Error('查询任务失败（HTTP ' + res.status + '）');
+    const data = (await res.json()).data;
+    if (onTick) onTick(data);
+    if (data.status === 'completed') return data;
+    if (data.status === 'failed') throw new Error(data.error || '任务失败');
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  throw new Error('任务超时，请到任务中心查看');
 }
 
 const QUALITY_API = '/api/quality';
@@ -2409,6 +2584,24 @@ function renderImportPreview(data) {
   }
 }
 
+function showImportResult(imported, skipped) {
+  document.getElementById('import-step2').style.display = 'none';
+  document.getElementById('import-step3').style.display = '';
+  document.getElementById('import-result-icon').textContent = '🎉';
+  document.getElementById('import-result-msg').textContent = '导入成功！';
+  document.getElementById('import-result-msg').style.color = '#16a34a';
+  document.getElementById('import-result-detail').innerHTML =
+    `成功导入 <strong>${imported}</strong> 条${skipped > 0 ? `，跳过 <strong>${skipped}</strong> 条重复` : ''}`;
+
+  const btn = document.getElementById('import-btn-confirm');
+  btn.textContent = '完 成';
+  btn.disabled = false;
+  btn.onclick = () => {
+    closeImportModal();
+    loadKnowledge();
+  };
+}
+
 async function confirmImport() {
   if (!pendingImportData || !pendingImportData.preview) return;
 
@@ -2425,34 +2618,27 @@ async function confirmImport() {
       throw new Error('没有可导入的新数据');
     }
 
-    const res = await fetch(API + '/knowledge/import/confirm', {
+    const res = await apiFetch(API + '/knowledge/import/confirm', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      body: JSON.stringify({ items: validItems })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: validItems }),
     });
 
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
 
-    // 显示结果
-    document.getElementById('import-step2').style.display = 'none';
-    document.getElementById('import-step3').style.display = '';
-    document.getElementById('import-result-icon').textContent = '🎉';
-    document.getElementById('import-result-msg').textContent = '导入成功！';
-    document.getElementById('import-result-msg').style.color = '#16a34a';
-    document.getElementById('import-result-detail').innerHTML =
-      `成功导入 <strong>${data.imported}</strong> 条${data.skipped > 0 ? `，跳过 <strong>${data.skipped}</strong> 条重复` : ''}`;
+    // 兼容旧同步接口
+    if (!data.jobId) {
+      showImportResult(data.imported || 0, data.skipped || 0);
+      pendingImportData = null;
+      return;
+    }
 
-    document.getElementById('import-btn-confirm').textContent = '完 成';
-    document.getElementById('import-btn-confirm').disabled = false;
-    document.getElementById('import-btn-confirm').onclick = () => {
-      closeImportModal();
-      loadKnowledge();  // 刷新知识库列表
-    };
-
+    // 异步任务：轮询到完成
+    const job = await pollJob(data.jobId, {
+      onTick: (j) => { btn.textContent = `⏳ 导入中（${j.status}）...`; },
+    });
+    showImportResult((job.result && job.result.added) || 0, (job.result && job.result.skipped) || 0);
     pendingImportData = null;
   } catch (e) {
     btn.disabled = false;

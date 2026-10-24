@@ -181,7 +181,7 @@ class KnowledgeService {
     return { success: true };
   }
 
-  async batchAdd(items) {
+  async batchAdd(items, { waitForEmbeddings = false } = {}) {
     await this._ready;
 
     const existingQuestions = new Set(this.knowledgeBase.map(k => k.question.trim()));
@@ -216,7 +216,11 @@ class KnowledgeService {
 
     if (added > 0) {
       await this.saveAll();
-      this._batchComputeEmbeddingsFor(newItems);
+      if (waitForEmbeddings) {
+        await this._batchComputeEmbeddingsFor(newItems);
+      } else {
+        this._batchComputeEmbeddingsFor(newItems);
+      }
     }
 
     return { added, skipped };

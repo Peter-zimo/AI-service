@@ -314,7 +314,7 @@ function createApp() {
 
   // ---------- 管理 API ----------
   app.use('/api/knowledge', limiters.admin, jwtAuth(['admin', 'agent']), knowledgeRoutes);
-  app.use('/api/jobs', limiters.admin, jwtAuth(['admin']), jobsRoutes);
+  app.use('/api/jobs', limiters.admin, jwtAuth(['admin', 'agent']), jobsRoutes);
   app.use('/api/quality', limiters.admin, jwtAuth(['admin']), qualityRoutes);
   app.use('/api/config', limiters.admin, jwtAuth(['admin']), configRoutes.router);
   app.use('/api/sensitive', limiters.admin, jwtAuth(['admin', 'agent']), sensitiveRoutes);

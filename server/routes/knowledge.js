@@ -137,7 +137,7 @@ router.post('/import/parse', (req, res) => {
   });
 });
 
-// ============ 导入：确认写入 ============
+// ============ 导入：确认写入（异步任务） ============
 
 router.post('/import/confirm', async (req, res) => {
   try {
@@ -146,16 +146,11 @@ router.post('/import/confirm', async (req, res) => {
       return res.status(400).json({ success: false, error: '没有可导入的数据' });
     }
 
-    const result = await knowledgeService.batchAdd(items);
-    res.json({
-      success: true,
-      imported: result.added,
-      skipped: result.skipped,
-      message: `成功导入 ${result.added} 条，跳过 ${result.skipped} 条重复`,
-    });
+    const jobId = require('../jobs').enqueue('knowledge.import', { items });
+    res.json({ success: true, async: true, jobId, statusUrl: `/api/jobs/${jobId}` });
   } catch (error) {
-    console.error('导入确认失败:', error);
-    res.status(500).json({ success: false, error: '导入失败: ' + error.message });
+    console.error('导入任务提交失败:', error);
+    res.status(500).json({ success: false, error: '导入任务提交失败: ' + error.message });
   }
 });
 

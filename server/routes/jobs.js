@@ -17,6 +17,10 @@ const jobs = require('../jobs');
 const router = express.Router();
 
 router.post('/', (req, res) => {
+  if (!req.auth || req.auth.role !== 'admin') {
+    return res.status(403).json({ success: false, error: '仅管理员可创建任务' });
+  }
+
   const { type, payload } = req.body || {};
   if (!type) {
     return res.status(400).json({ success: false, error: '缺少 type' });
