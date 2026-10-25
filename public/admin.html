@@ -2321,30 +2321,35 @@ function initApp() {
 }
 
 // 页面显示时（包括从 bfcache 恢复、浏览器后退），重新检查登录状态
-window.addEventListener('pageshow', function(e) {
+window.addEventListener('pageshow', function() {
   const savedAuth = localStorage.getItem('authHeader');
   const savedUser = localStorage.getItem('currentUser');
   const loginModal = document.getElementById('login-modal');
   // 校验凭证格式：只认 Bearer JWT（旧 Basic 凭证直接作废）
   const validAuth = savedAuth && savedAuth.startsWith('Bearer ');
-  if (validAuth && savedUser && !isLoggedIn) {
-    // localStorage 有有效凭证且当前未登录 → 恢复登录状态
-    authHeader = savedAuth;
-    currentUser = savedUser;
-    isLoggedIn = true;
+
+  // 有有效凭证：保持登录态。
+  // 从统计面板返回 / bfcache 恢复时 isLoggedIn 仍为 true，不能因此清 token、弹登录框。
+  if (validAuth && savedUser) {
     loginModal.style.display = 'none';
-    initApp();
-  } else {
-    // 无凭证或凭证已过期格式 → 清掉并显示登录框
-    if (savedAuth) {
-      localStorage.removeItem('authHeader');
-      localStorage.removeItem('currentUser');
+    if (!isLoggedIn) {
+      authHeader = savedAuth;
+      currentUser = savedUser;
+      isLoggedIn = true;
+      initApp();
     }
-    authHeader = '';
-    currentUser = '';
-    isLoggedIn = false;
-    loginModal.style.display = 'flex';
+    return;
   }
+
+  // 无凭证或凭证格式无效：清掉并显示登录框
+  if (savedAuth) {
+    localStorage.removeItem('authHeader');
+    localStorage.removeItem('currentUser');
+  }
+  authHeader = '';
+  currentUser = '';
+  isLoggedIn = false;
+  loginModal.style.display = 'flex';
 });
 async function loadBrandConfig() {
   try {
