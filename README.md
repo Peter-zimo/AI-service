@@ -73,6 +73,21 @@ node start.js status   # 查看状态
 node start.js stop     # 停止
 ```
 
+### Python AI 引擎（monorepo）
+
+代码在 `ai-service-langchain/`，`node start.js` 会同时启动 Node 与 Python。
+首次运行需要准备依赖和模型：
+
+```bash
+python -m venv ai-service-langchain/.venv
+ai-service-langchain/.venv/Scripts/pip install -r ai-service-langchain/requirements.txt   # Windows
+# ai-service-langchain/.venv/bin/pip install -r ai-service-langchain/requirements.txt     # macOS/Linux
+cp ai-service-langchain/.env.example ai-service-langchain/.env   # 填 LLM Key
+# 下载 bge-small-zh-v1.5 到 ai-service-langchain/models/，或设置 BGE_MODEL_PATH
+```
+
+`.env`、`.venv`、`models/` 已在 `ai-service-langchain/.gitignore` 中排除，不会提交。
+
 ### 生成演示数据（可选）
 
 ```bash
@@ -121,12 +136,15 @@ AI智能客服V3（node.js版）/
 │   └── data/                # SQLite 数据库与种子数据
 ├── scripts/                 # 运维与质量脚本
 │   └── check-architecture.js# 架构护栏（五条硬约束，已接入 npm test）
-├── ai_customer_service/     # Python AI 服务（LangChain + DeepSeek）
+├── ai-service-langchain/    # Python AI 服务（FastAPI + LangChain + BGE）
 ├── public/                  # 前端（原生 HTML/CSS/JS）
 │   ├── css/                 # 设计系统 theme.css + 各页面样式
 │   ├── js/common.js         # 公共工具库
 │   ├── widget/              # Chat Widget（chat.html/widget.js/demo-site.html）
 │   └── *.html               # 访客端/管理后台/客服台/统计/能力地图
+├── docker-compose.yml       # 容器编排
+└── start.js / start.bat     # 一键启动
+```
 
 ### 分层约定
 
@@ -141,12 +159,6 @@ AI智能客服V3（node.js版）/
 
 约束由 `npm run arch` 自动检查，`npm test` 会先跑它，不通过则测试不执行。
 存量文件的豁免登记在 `scripts/architecture-allowlist.json`，只减不增。
-
-├── scripts/                 # 工具脚本（seed-demo.js 等）
-├── db/migrations/           # PostgreSQL 迁移
-├── docker-compose.yml       # 容器编排
-└── start.js / start.bat     # 一键启动
-```
 
 ## 部署（Docker）
 

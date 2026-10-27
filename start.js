@@ -25,8 +25,9 @@ const NODE_STDOUT = path.join(ROOT, 'server', 'data', 'stdout.log');
 function detectAIServiceDir() {
   const candidates = [
     process.env.AI_SERVICE_DIR,                          // 1. 显式指定
-    path.join(ROOT, '..', 'ai-service-langchain'),       // 2. 项目同级（推荐 demo 布局）
-    'D:/AI应用/ai-service-langchain',                    // 3. 本机原路径（兜底）
+    path.join(ROOT, 'ai-service-langchain'),             // 2. monorepo 内置（推荐）
+    path.join(ROOT, '..', 'ai-service-langchain'),       // 3. 项目同级（兼容旧布局）
+    'D:/AI应用/ai-service-langchain',                    // 4. 本机原路径（兜底）
   ].filter(Boolean);
   // 入口文件支持 run.py（旧）或 main.py（当前），二者存在其一即可
   for (const c of candidates) {
@@ -42,10 +43,14 @@ function detectAIEntry(dir) {
 }
 
 function detectPython() {
+  const aiDir = detectAIServiceDir();
   const candidates = [
     process.env.AI_PYTHON,                               // 1. 显式指定
-    'C:/Users/Dell/.workbuddy/binaries/python/versions/3.13.12/python.exe', // 2. 本机已验证路径
-    'python',                                            // 3. PATH 中的 python（换机器用）
+    path.join(aiDir, '.venv', 'Scripts', 'python.exe'),   // 2. 引擎目录内 venv（Windows）
+    path.join(aiDir, '.venv', 'bin', 'python'),           // 3. 引擎目录内 venv（POSIX）
+    'D:/AI应用/ai-service-langchain/.venv/Scripts/python.exe', // 4. 本机原 venv（兜底）
+    'C:/Users/Dell/.workbuddy/binaries/python/versions/3.13.12/python.exe', // 5. 本机已验证路径
+    'python',                                            // 6. PATH 中的 python
   ].filter(Boolean);
   for (const c of candidates) {
     try { execSync(`"${c}" --version`, { stdio: 'pipe' }); return c; } catch (_) {}

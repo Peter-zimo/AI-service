@@ -1,0 +1,15 @@
+# LangChain + FastAPI 独立服务依赖
+langchain
+langchain-core>=1.2.5
+langchain-community>=0.3.27
+langchain-openai>=0.3.0
+fastapi>=0.115.0
+uvicorn>=0.32.0
+requests>=2.32.4
+pydantic>=2.4.0
+jieba>=0.42.1
+rank-bm25>=0.2.2
+httpx>=0.28.0
+python-dotenv>=1.0.0
+# 本地 BGE 语义模型（体积较大，会拉 torch）。未安装时自动降级为 128 维 bigram。
+sentence-transformers>=3.0.0
