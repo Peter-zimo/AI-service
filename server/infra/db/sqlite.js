@@ -289,12 +289,19 @@ if (!fs.existsSync(backupDir)) {
   fs.mkdirSync(backupDir, { recursive: true });
 }
 
-function backupDatabase() {
+async function backupDatabase() {
   try {
     const dateStr = new Date().toISOString().split('T')[0];
     const backupPath = path.join(backupDir, `service_${dateStr}.db`);
     if (fs.existsSync(backupPath)) return;
-    db.backup(backupPath);
+    await db.backup(backupPath);
+
+    // 备份后做一次轻量完整性检查，尽早发现索引/页损坏
+    const check = db.pragma('quick_check', { simple: true });
+    if (check !== 'ok') {
+      console.error(`[SQLite] 备份后完整性检查失败: ${check}`);
+    }
+
     console.log(`[SQLite] 备份完成: ${backupPath}`);
     // 清理7天前的备份
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;

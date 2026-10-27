@@ -6,9 +6,11 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node scripts/check-architecture.js && node --test test/*.test.js",
+    "test:e2e": "node --test test/e2e/smoke.e2e.js",
     "arch": "node scripts/check-architecture.js",
     "arch:verbose": "node scripts/check-architecture.js --verbose",
     "eval:quality": "node scripts/run-quality-eval.js",
+    "db:drill": "node scripts/db-backup-drill.js",
     "verify:release": "node scripts/verify-release.js"
   },
   "dependencies": {
