@@ -23,8 +23,15 @@ const tmpDb = path.join(os.tmpdir(), `kb-test-${Date.now()}.db`);
 
 let kb;
 before(async () => {
-  // 1. 拷贝临时库（隔离生产数据）
-  fs.copyFileSync(PROD_DB, tmpDb);
+  // 1. 拷贝临时库（隔离生产数据）；用 SQLite 在线备份，避免 WAL 裸拷贝丢页
+  execFileSync(process.execPath, ['-e', `
+    const Database = require('better-sqlite3');
+    (async () => {
+      const src = new Database(${JSON.stringify(PROD_DB)}, { readonly: true, fileMustExist: true });
+      await src.backup(${JSON.stringify(tmpDb)});
+      src.close();
+    })();
+  `], { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
   execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'sync-knowledge.js')], {
     env: { ...process.env, SQLITE_DB_PATH: tmpDb },
     stdio: 'pipe',

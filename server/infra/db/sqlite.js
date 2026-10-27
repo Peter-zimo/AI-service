@@ -288,22 +288,25 @@ seedOrders();
 // 备份目录默认跟随库文件所在目录，避免 start.js 的 service_init.db 被“自定义库”规则误关备份
 const backupDir = process.env.BACKUP_DIR || path.join(path.dirname(dbPath), 'backups');
 const dbBase = path.basename(dbPath, '.db');
-if (!fs.existsSync(backupDir)) {
-  fs.mkdirSync(backupDir, { recursive: true });
-}
 
 let backupRunning = false;
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function cleanupOldBackups() {
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-  const prefix = `${dbBase}_`;
+  // 严格按库名 + 日期匹配，避免 service_ 误删 service_init_*
+  const pattern = new RegExp(
+    `^${escapeRegExp(dbBase)}_\\d{4}-\\d{2}-\\d{2}\\.db(\\.[0-9]+\\.tmp)?(-shm|-wal|-journal)?$`
+  );
 
   for (const file of fs.readdirSync(backupDir)) {
-    if (!file.startsWith(prefix)) continue;
-    if (!/\.(db|tmp)(-shm|-wal)?$/.test(file)) continue;
+    if (!pattern.test(file)) continue;
     const filePath = path.join(backupDir, file);
     if (Date.now() - fs.statSync(filePath).mtimeMs > SEVEN_DAYS) {
-      fs.rmSync(filePath, { force: true });
+      try { fs.rmSync(filePath, { force: true }); } catch (_) { /* 忽略 */ }
       console.log(`[SQLite] 清理旧备份: ${file}`);
     }
   }
@@ -318,6 +321,7 @@ async function backupDatabase() {
   let checkDb = null;
 
   try {
+    fs.mkdirSync(backupDir, { recursive: true });
     await db.backup(tmpPath);
 
     // 校验备份产物本身；读写打开，close 时 checkpoint 并清理 -wal/-shm
@@ -331,8 +335,7 @@ async function backupDatabase() {
       return;
     }
 
-    // 同目录 rename 原子替换；Windows 下先删目标
-    if (fs.existsSync(backupPath)) fs.rmSync(backupPath, { force: true });
+    // 同目录 rename 原子替换（Windows/POSIX 均覆盖已存在文件）
     fs.renameSync(tmpPath, backupPath);
     console.log(`[SQLite] 备份完成: ${backupPath}`);
     cleanupOldBackups();
@@ -340,8 +343,8 @@ async function backupDatabase() {
     console.error('[SQLite] 备份失败:', e.message);
   } finally {
     if (checkDb) { try { checkDb.close(); } catch (_) { /* 忽略 */ } }
-    for (const p of [tmpPath, `${tmpPath}-shm`, `${tmpPath}-wal`]) {
-      fs.rmSync(p, { force: true });
+    for (const p of [tmpPath, `${tmpPath}-shm`, `${tmpPath}-wal`, `${tmpPath}-journal`]) {
+      try { fs.rmSync(p, { force: true }); } catch (_) { /* 忽略 */ }
     }
     backupRunning = false;
   }
@@ -349,15 +352,21 @@ async function backupDatabase() {
 
 function scheduleNextBackup() {
   const timer = setTimeout(async () => {
-    await backupDatabase();
-    scheduleNextBackup();
+    try {
+      await backupDatabase();
+    } catch (e) {
+      console.error('[SQLite] 定时备份异常:', e.message);
+    } finally {
+      // 无论成功失败都续期，避免一次异常导致每日备份链永久中断
+      scheduleNextBackup();
+    }
   }, nextBackupDelay());
   if (timer.unref) timer.unref();
 }
 
 const backupDisabled = /^(1|true|yes|on)$/i.test(process.env.DISABLE_DB_BACKUP || '');
 if (!backupDisabled) {
-  backupDatabase(); // 启动时备份一次
+  backupDatabase().catch((e) => console.error('[SQLite] 启动备份异常:', e.message));
   scheduleNextBackup();
 }
 

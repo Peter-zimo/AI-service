@@ -42,3 +42,21 @@ test('nextBackupDelay targets next day late at night', () => {
   assert.equal(next.getHours(), 3);
   assert.equal(nextBackupDelay(now), 3 * HOUR + 60 * 1000);
 });
+
+test('nextBackupDelay handles 02:59:59.999', () => {
+  const now = new Date(2026, 9, 27, 2, 59, 59, 999);
+  const next = new Date(now.getTime() + nextBackupDelay(now));
+  assert.equal(next.getDate(), 27);
+  assert.equal(next.getHours(), 3);
+  assert.equal(nextBackupDelay(now), 1);
+});
+
+test('nextBackupDelay crosses year boundary', () => {
+  const now = new Date(2026, 11, 31, 4, 0, 0, 0);
+  const next = new Date(now.getTime() + nextBackupDelay(now));
+  assert.equal(next.getFullYear(), 2027);
+  assert.equal(next.getMonth(), 0);
+  assert.equal(next.getDate(), 1);
+  assert.equal(next.getHours(), 3);
+  assert.equal(nextBackupDelay(now), 23 * HOUR);
+});
