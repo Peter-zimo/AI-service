@@ -283,48 +283,77 @@ function seedOrders() {
 
 seedOrders();
 
-// ===== 数据库自动备份（每日凌晨3点，保留最近7天）=====
-const backupDir = path.join(__dirname, '../../data/backups');
+// ===== 数据库自动备份（每日 03:00，保留最近 7 天）=====
+const backupDir = process.env.BACKUP_DIR || path.join(__dirname, '../../data/backups');
 if (!fs.existsSync(backupDir)) {
   fs.mkdirSync(backupDir, { recursive: true });
 }
 
+function localDateStr() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 async function backupDatabase() {
   try {
-    const dateStr = new Date().toISOString().split('T')[0];
-    const backupPath = path.join(backupDir, `service_${dateStr}.db`);
-    if (fs.existsSync(backupPath)) return;
-    await db.backup(backupPath);
+    const backupPath = path.join(backupDir, `service_${localDateStr()}.db`);
+    const tmpPath = `${backupPath}.${process.pid}.tmp`;
 
-    // 备份后做一次轻量完整性检查，尽早发现索引/页损坏
-    const check = db.pragma('quick_check', { simple: true });
+    await db.backup(tmpPath);
+
+    // 校验备份产物本身（而不是源库），避免把坏备份留在保留期内
+    const checkDb = new Database(tmpPath, { readonly: true, fileMustExist: true });
+    const check = checkDb.pragma('quick_check', { simple: true });
+    checkDb.close();
+
     if (check !== 'ok') {
-      console.error(`[SQLite] 备份后完整性检查失败: ${check}`);
+      fs.rmSync(tmpPath, { force: true });
+      console.error(`[SQLite] 备份完整性检查失败，已丢弃: ${check}`);
+      return;
     }
 
+    fs.copyFileSync(tmpPath, backupPath);
+    fs.rmSync(tmpPath, { force: true });
     console.log(`[SQLite] 备份完成: ${backupPath}`);
-    // 清理7天前的备份
+
+    // 清理 7 天前的备份（含 -shm/-wal 伴生文件）
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
     for (const file of fs.readdirSync(backupDir)) {
-      if (file.startsWith('service_') && file.endsWith('.db')) {
-        const filePath = path.join(backupDir, file);
-        if (Date.now() - fs.statSync(filePath).mtimeMs > SEVEN_DAYS) {
-          fs.unlinkSync(filePath);
-          console.log(`[SQLite] 清理旧备份: ${file}`);
-        }
+      if (!/^service_.*\.db(-shm|-wal)?$/.test(file)) continue;
+      const filePath = path.join(backupDir, file);
+      if (Date.now() - fs.statSync(filePath).mtimeMs > SEVEN_DAYS) {
+        fs.rmSync(filePath, { force: true });
+        console.log(`[SQLite] 清理旧备份: ${file}`);
       }
     }
   } catch (e) {
     console.error('[SQLite] 备份失败:', e.message);
   }
 }
-if (process.env.DISABLE_DB_BACKUP !== 'true') {
+
+function scheduleNextBackup() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(3, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+
+  const timer = setTimeout(async () => {
+    await backupDatabase();
+    scheduleNextBackup();
+  }, next - now);
+  if (timer.unref) timer.unref();
+}
+
+const backupDisabled = /^(1|true|yes|on)$/i.test(process.env.DISABLE_DB_BACKUP || '');
+// 自定义 DB（测试/临时库）且没指定备份目录时，不要把临时库备份写进生产备份目录
+const customDbWithoutBackupDir = !!process.env.SQLITE_DB_PATH && !process.env.BACKUP_DIR;
+
+if (!backupDisabled && !customDbWithoutBackupDir) {
   backupDatabase(); // 启动时备份一次
-  const backupTimer = setInterval(() => {
-    const now = new Date();
-    if (now.getHours() === 3 && now.getMinutes() < 1) backupDatabase();
-  }, 60 * 60 * 1000);
-  backupTimer.unref();
+  scheduleNextBackup();
+} else if (customDbWithoutBackupDir) {
+  console.log('[SQLite] 自定义 SQLITE_DB_PATH 且未设置 BACKUP_DIR，跳过自动备份');
 }
 
 module.exports = db;

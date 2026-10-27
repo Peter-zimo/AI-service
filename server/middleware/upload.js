@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { removeTemp } = require('../utils/temp-file');
 
-const UPLOAD_DIR = path.join(__dirname, '../../uploads');
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
 const ALLOWED_EXTENSIONS = new Set(['.csv', '.json']);
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const STALE_MS = 60 * 60 * 1000; // 1 小时

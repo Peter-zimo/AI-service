@@ -2584,6 +2584,18 @@ async function resetBrandConfig() {
 /* ========== 批量导入知识库 ========== */
 let pendingImportData = null;  // 暂存解析后的数据
 
+function resetImportDropZone() {
+  const dropZone = document.getElementById('import-drop-zone');
+  if (!dropZone) return;
+  dropZone.innerHTML = `
+    <div style="font-size:28px;margin-bottom:8px;">📁</div>
+    <div style="font-size:14px;color:#374151;font-weight:500;">点击上传文件，或拖拽文件到这里</div>
+    <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .json，单文件不超过 2MB</div>
+    <input type="file" id="import-file-input" accept=".csv,.json,text/csv,application/json" style="display:none;" onchange="handleImportFile(this.files[0])">`;
+  dropZone.style.borderColor = '#e5e7eb';
+  dropZone.style.background = 'transparent';
+}
+
 function openImportModal() {
   pendingImportData = null;
   document.getElementById('import-step1').style.display = '';
@@ -2592,10 +2604,12 @@ function openImportModal() {
   document.getElementById('import-btn-confirm').disabled = true;
   document.getElementById('import-btn-confirm').style.opacity = '0.5';
   document.getElementById('import-btn-confirm').textContent = '确 认 导 入';
+  // 上一次成功后 onclick 被改成“关闭弹窗”，重新打开时必须恢复成确认导入
+  document.getElementById('import-btn-confirm').onclick = confirmImport;
   document.getElementById('import-btn-cancel').textContent = '取消';
+  // 上一次解析时 drop zone 被替换成“解析中”，file input 已被移除，这里统一重建
+  resetImportDropZone();
   document.getElementById('import-file-input').value = '';
-  document.getElementById('import-drop-zone').style.borderColor = '#e5e7eb';
-  document.getElementById('import-drop-zone').style.background = 'transparent';
   openModal('import-modal');
 }
 
@@ -2651,12 +2665,7 @@ function handleImportFile(file) {
     })
     .catch(e => {
       toast('解析失败：' + e.message, 'error');
-      // 恢复上传区
-      dropZone.innerHTML = `
-        <div style="font-size:28px;margin-bottom:8px;">📁</div>
-        <div style="font-size:14px;color:#374151;font-weight:500;">点击上传文件，或拖拽文件到这里</div>
-        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">支持 .csv 和 .json，单文件不超过 2MB</div>
-        <input type="file" id="import-file-input" accept=".csv,.json,text/csv,application/json" style="display:none;" onchange="handleImportFile(this.files[0])">`;
+      resetImportDropZone();
     });
 }
 

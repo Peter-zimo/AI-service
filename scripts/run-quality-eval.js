@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const Database = require('better-sqlite3');
 const { v4: uuidv4 } = require('uuid');
 const cases = require('../quality/eval-cases-v1.json');
 const { toCsv } = require('../server/utils/csv');
@@ -77,7 +78,10 @@ async function runEvaluation(options = {}) {
 async function main() {
   const sourceDb = path.join(__dirname, '..', 'server', 'data', 'service.db');
   const dbPath = path.join(os.tmpdir(), `quality-eval-${process.pid}-${Date.now()}.db`);
-  fs.copyFileSync(sourceDb, dbPath);
+  // WAL 模式下裸 copy 可能拿到未合并的旧快照，改用 SQLite 在线备份
+  const src = new Database(sourceDb, { readonly: true, fileMustExist: true });
+  await src.backup(dbPath);
+  src.close();
   process.env.SQLITE_DB_PATH = dbPath;
   process.env.DISABLE_DB_BACKUP = 'true';
   try {

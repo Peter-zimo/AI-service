@@ -12,7 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const context = require('./request-context');
 
-const logsDir = path.join(__dirname, '../../logs');
+const logsDir = process.env.LOG_DIR || path.join(__dirname, '../../logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
