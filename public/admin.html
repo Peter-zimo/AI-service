@@ -798,6 +798,7 @@ const API = ((window.__ENV__ && window.__ENV__.VITE_API_URL) || window.location.
 let knowledgeCache = [];
 let healthOk = false;
 let isLoggedIn = !!authHeader;
+console.log('[admin] build 2026-10-27-login-fix');
 
 /* ===== 登录 ===== */
 function doLogin() {
@@ -823,7 +824,12 @@ function doLogin() {
     if (!data.success) throw new Error('密码错误');
     // 升级为 JWT Bearer token
     authHeader = 'Bearer ' + data.data.accessToken;
+    currentUser = (data.data.user && data.data.user.username) || username;
     localStorage.setItem('authHeader', authHeader);
+    localStorage.setItem('currentUser', currentUser);
+    if (data.data.refreshToken) {
+      localStorage.setItem('refreshToken', data.data.refreshToken);
+    }
     isLoggedIn = true;
     healthOk = true;
     document.getElementById('login-modal').style.display = 'none';
@@ -837,6 +843,7 @@ function doLogin() {
     authHeader = '';
     localStorage.removeItem('authHeader');
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('refreshToken');
   });
 }
 
@@ -852,6 +859,7 @@ function logout() {
   currentUser = '';
   localStorage.removeItem('authHeader');
   localStorage.removeItem('currentUser');
+  localStorage.removeItem('refreshToken');
   location.reload();
 }
 
@@ -1184,6 +1192,26 @@ function fetchWithTimeout(url, options = {}, ms = 8000) {
   return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
+async function tryRefreshToken() {
+  const rt = localStorage.getItem('refreshToken');
+  if (!rt) return false;
+  try {
+    const res = await fetchWithTimeout(API + '/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: rt }),
+    }, 5000);
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data.success || !data.data || !data.data.accessToken) return false;
+    authHeader = 'Bearer ' + data.data.accessToken;
+    localStorage.setItem('authHeader', authHeader);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 async function apiFetch(url, options = {}, timeout) {
   const headers = { ...(options.headers || {}) };
   if (authHeader) {
@@ -1198,6 +1226,12 @@ async function apiFetch(url, options = {}, timeout) {
     throw new Error('服务未连接，请确认服务已启动');
   }
   if (res.status === 401) {
+    // access token 过期时先尝试 refresh，避免直接弹登录
+    if (await tryRefreshToken()) {
+      headers['Authorization'] = authHeader;
+      res = await fetchWithTimeout(url, { ...options, headers }, timeout || options.timeout || 8000);
+      if (res.status !== 401) return res;
+    }
     showLoginForm();
     throw new Error('登录已过期，请重新登录');
   }
@@ -2330,11 +2364,12 @@ window.addEventListener('pageshow', function() {
 
   // 有有效凭证：保持登录态。
   // 从统计面板返回 / bfcache 恢复时 isLoggedIn 仍为 true，不能因此清 token、弹登录框。
-  if (validAuth && savedUser) {
+  if (validAuth) {
     loginModal.style.display = 'none';
     if (!isLoggedIn) {
       authHeader = savedAuth;
-      currentUser = savedUser;
+      currentUser = savedUser || 'admin';
+      if (!savedUser) localStorage.setItem('currentUser', currentUser);
       isLoggedIn = true;
       initApp();
     }
@@ -2527,10 +2562,11 @@ async function resetBrandConfig() {
     const savedAuth = localStorage.getItem('authHeader');
     const savedUser = localStorage.getItem('currentUser');
     // 只认 Bearer JWT（旧 Basic 凭证直接作废，防止 401 循环）
-    if (savedAuth && savedAuth.startsWith('Bearer ') && savedUser) {
+    if (savedAuth && savedAuth.startsWith('Bearer ')) {
       // localStorage 有凭证 → 直接恢复登录状态，无需调接口验证
       authHeader = savedAuth;
-      currentUser = savedUser;
+      currentUser = savedUser || 'admin';
+      if (!savedUser) localStorage.setItem('currentUser', currentUser);
       isLoggedIn = true;
       document.getElementById('login-modal').style.display = 'none';
       initApp();
