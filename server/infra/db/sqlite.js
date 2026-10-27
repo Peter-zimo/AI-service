@@ -295,7 +295,26 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function cleanupStaleTmp() {
+  const TMP_TTL = 24 * 60 * 60 * 1000;
+
+  for (const file of fs.readdirSync(backupDir)) {
+    if (!file.includes('.tmp')) continue;
+    const filePath = path.join(backupDir, file);
+    try {
+      if (Date.now() - fs.statSync(filePath).mtimeMs > TMP_TTL) {
+        fs.rmSync(filePath, { force: true });
+        console.log(`[SQLite] 清理临时备份: ${file}`);
+      }
+    } catch (_) {
+      /* 文件可能已被其他进程清掉 */
+    }
+  }
+}
+
 function cleanupOldBackups() {
+  cleanupStaleTmp();
+
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
   // 严格按库名 + 日期匹配，避免 service_ 误删 service_init_*
   const pattern = new RegExp(
@@ -305,7 +324,15 @@ function cleanupOldBackups() {
   for (const file of fs.readdirSync(backupDir)) {
     if (!pattern.test(file)) continue;
     const filePath = path.join(backupDir, file);
-    if (Date.now() - fs.statSync(filePath).mtimeMs > SEVEN_DAYS) {
+
+    let mtime;
+    try {
+      mtime = fs.statSync(filePath).mtimeMs;
+    } catch (_) {
+      continue;
+    }
+
+    if (Date.now() - mtime > SEVEN_DAYS) {
       try { fs.rmSync(filePath, { force: true }); } catch (_) { /* 忽略 */ }
       console.log(`[SQLite] 清理旧备份: ${file}`);
     }
@@ -326,6 +353,7 @@ async function backupDatabase() {
 
     // 校验备份产物本身；读写打开，close 时 checkpoint 并清理 -wal/-shm
     checkDb = new Database(tmpPath);
+    checkDb.pragma('journal_mode = DELETE');
     const check = checkDb.pragma('quick_check', { simple: true });
     checkDb.close();
     checkDb = null;
@@ -338,7 +366,12 @@ async function backupDatabase() {
     // 同目录 rename 原子替换（Windows/POSIX 均覆盖已存在文件）
     fs.renameSync(tmpPath, backupPath);
     console.log(`[SQLite] 备份完成: ${backupPath}`);
-    cleanupOldBackups();
+    try {
+      cleanupOldBackups();
+    } catch (e) {
+      // 清理失败不应被误报成“备份失败”
+      console.error('[SQLite] 清理旧备份失败:', e.message);
+    }
   } catch (e) {
     console.error('[SQLite] 备份失败:', e.message);
   } finally {

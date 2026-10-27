@@ -5,7 +5,7 @@
  *   未运行时跳过语义相关用例（本地/CI 无 AI 服务时降级提示）
  * 运行：npm test
  */
-const { test, before } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -30,7 +30,7 @@ before(async () => {
       const src = new Database(${JSON.stringify(PROD_DB)}, { readonly: true, fileMustExist: true });
       await src.backup(${JSON.stringify(tmpDb)});
       src.close();
-    })();
+    })().catch((e) => { console.error(e); process.exit(1); });
   `], { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
   execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'sync-knowledge.js')], {
     env: { ...process.env, SQLITE_DB_PATH: tmpDb },
@@ -41,6 +41,12 @@ before(async () => {
   // 2. 加载知识库（必须在设 env 之后 require）
   kb = require('../server/modules/knowledge');
   await kb._ready;
+});
+
+after(() => {
+  for (const p of [tmpDb, `${tmpDb}-wal`, `${tmpDb}-shm`, `${tmpDb}-journal`]) {
+    try { fs.rmSync(p, { force: true }); } catch (_) { /* 忽略 */ }
+  }
 });
 
 const UNRELATED = ['今天股市怎么样', '你们老板叫什么', '你吃饭了吗', '推荐一部电影', '北京天气怎么样'];
