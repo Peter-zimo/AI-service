@@ -290,6 +290,9 @@ const backupDir = process.env.BACKUP_DIR || path.join(path.dirname(dbPath), 'bac
 const dbBase = path.basename(dbPath, '.db');
 
 let backupRunning = false;
+let backupRunningSince = null;
+let lastBackupAt = null;
+let lastBackupOk = null;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -314,6 +317,21 @@ function cleanupStaleTmp() {
 
 function cleanupOldBackups() {
   cleanupStaleTmp();
+
+  // 归档的损坏/修复前备份保留 30 天，避免永久占用
+  const ARCHIVE_TTL = 30 * 24 * 60 * 60 * 1000;
+  for (const file of fs.readdirSync(backupDir)) {
+    if (!/^(corrupt|pre_reindex)_/.test(file)) continue;
+    const filePath = path.join(backupDir, file);
+    try {
+      if (Date.now() - fs.statSync(filePath).mtimeMs > ARCHIVE_TTL) {
+        fs.rmSync(filePath, { force: true });
+        console.log(`[SQLite] 清理归档备份: ${file}`);
+      }
+    } catch (_) {
+      /* 忽略 */
+    }
+  }
 
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
   // 严格按库名 + 日期匹配，避免 service_ 误删 service_init_*
@@ -341,7 +359,9 @@ function cleanupOldBackups() {
 
 async function backupDatabase() {
   if (backupRunning) return;
+  let success = false;
   backupRunning = true;
+  backupRunningSince = Date.now();
 
   const backupPath = path.join(backupDir, `${dbBase}_${localDateStr()}.db`);
   const tmpPath = `${backupPath}.${process.pid}.tmp`;
@@ -354,7 +374,7 @@ async function backupDatabase() {
     // 校验备份产物本身；读写打开，close 时 checkpoint 并清理 -wal/-shm
     checkDb = new Database(tmpPath);
     checkDb.pragma('journal_mode = DELETE');
-    const check = checkDb.pragma('quick_check', { simple: true });
+    const check = checkDb.pragma('integrity_check', { simple: true });
     checkDb.close();
     checkDb = null;
 
@@ -365,6 +385,7 @@ async function backupDatabase() {
 
     // 同目录 rename 原子替换（Windows/POSIX 均覆盖已存在文件）
     fs.renameSync(tmpPath, backupPath);
+    success = true;
     console.log(`[SQLite] 备份完成: ${backupPath}`);
     try {
       cleanupOldBackups();
@@ -379,6 +400,9 @@ async function backupDatabase() {
     for (const p of [tmpPath, `${tmpPath}-shm`, `${tmpPath}-wal`, `${tmpPath}-journal`]) {
       try { fs.rmSync(p, { force: true }); } catch (_) { /* 忽略 */ }
     }
+    lastBackupAt = Date.now();
+    lastBackupOk = success;
+    backupRunningSince = null;
     backupRunning = false;
   }
 }
@@ -401,6 +425,22 @@ const backupDisabled = /^(1|true|yes|on)$/i.test(process.env.DISABLE_DB_BACKUP |
 if (!backupDisabled) {
   backupDatabase().catch((e) => console.error('[SQLite] 启动备份异常:', e.message));
   scheduleNextBackup();
+
+  // 看门狗：长时间卡在备份（通常是被数据库锁阻塞）时至少留下告警
+  const watchdog = setInterval(() => {
+    if (backupRunning && backupRunningSince && Date.now() - backupRunningSince > 60 * 60 * 1000) {
+      console.error('[SQLite] 备份已运行超过 1 小时，可能被数据库锁阻塞');
+    }
+  }, 10 * 60 * 1000);
+  if (watchdog.unref) watchdog.unref();
 }
+
+// 供健康检查/排障读取（不改变 /api/health 的既有契约）
+db.getBackupStatus = () => ({
+  running: backupRunning,
+  runningSince: backupRunningSince,
+  lastAt: lastBackupAt,
+  lastOk: lastBackupOk,
+});
 
 module.exports = db;

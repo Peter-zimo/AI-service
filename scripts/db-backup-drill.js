@@ -17,8 +17,11 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+const { loadEnv } = require('../server/config/load-env');
 
 const ROOT = path.resolve(__dirname, '..');
+loadEnv(path.join(ROOT, '.env'));
+
 const DB_PATH = process.env.SQLITE_DB_PATH || path.join(ROOT, 'server/data/service.db');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(path.dirname(DB_PATH), 'backups');
 const DB_BASENAME = path.basename(DB_PATH, '.db');
@@ -130,6 +133,8 @@ async function main() {
 
     const report = {
       db: DB_PATH,
+      backupDir: BACKUP_DIR,
+      dbBase: DB_BASENAME,
       backupMs,
       backup: {
         size: backup.size,

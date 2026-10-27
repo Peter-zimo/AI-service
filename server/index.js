@@ -34,19 +34,8 @@ process.stderr.on('error', () => { /* 忽略，避免二次异常 */ });
 
 // ============ 2. 加载 .env ============
 
-const envPath = path.join(__dirname, '../.env');
-if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx < 1) continue;
-
-    const key = trimmed.substring(0, eqIdx).trim();
-    const val = trimmed.substring(eqIdx + 1).trim();
-    if (key && !process.env[key]) process.env[key] = val;
-  }
+const { loadEnv } = require('./config/load-env');
+if (loadEnv(path.join(__dirname, '../.env'))) {
   logger.info('.env 已加载');
 }
 

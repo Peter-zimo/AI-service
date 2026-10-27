@@ -7,6 +7,9 @@
 
 'use strict';
 
+// 备份由 HTTP 主进程负责；worker 不重复备份同一目标
+process.env.DISABLE_DB_BACKUP = 'true';
+
 const logger = require('./infra/logger');
 const jobs = require('./jobs');
 
