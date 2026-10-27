@@ -20,11 +20,16 @@ const Database = require('better-sqlite3');
 
 const ROOT = path.resolve(__dirname, '..');
 const DB_PATH = process.env.SQLITE_DB_PATH || path.join(ROOT, 'server/data/service.db');
-const BACKUP_DIR = process.env.BACKUP_DIR || path.join(ROOT, 'server/data/backups');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(path.dirname(DB_PATH), 'backups');
+const DB_BASENAME = path.basename(DB_PATH, '.db');
 const TABLES = ['knowledge', 'conversations', 'messages', 'ratings', 'stats'];
 const STALE_MS = 48 * 60 * 60 * 1000;
 
 let tempDir = null;
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function tableNames(db) {
   return new Set(
@@ -61,10 +66,15 @@ function inspect(file) {
 function inspectCopy(sourceFile, label) {
   const copy = path.join(tempDir, `inspect-${label}-${Date.now()}.db`);
   fs.copyFileSync(sourceFile, copy);
+  if (fs.existsSync(sourceFile + '-wal')) {
+    fs.copyFileSync(sourceFile + '-wal', copy + '-wal');
+  }
   try {
     return inspect(copy);
   } finally {
-    fs.rmSync(copy, { force: true });
+    for (const p of [copy, `${copy}-shm`, `${copy}-wal`]) {
+      fs.rmSync(p, { force: true });
+    }
   }
 }
 
@@ -96,8 +106,9 @@ async function main() {
     // 4. 检查保留期内的自动备份（只认标准日期文件）
     const autoBackups = [];
     if (fs.existsSync(BACKUP_DIR)) {
+      const pattern = new RegExp(`^${escapeRegExp(DB_BASENAME)}_\\d{4}-\\d{2}-\\d{2}\\.db$`);
       const files = fs.readdirSync(BACKUP_DIR)
-        .filter((f) => /^service_\d{4}-\d{2}-\d{2}\.db$/.test(f))
+        .filter((f) => pattern.test(f))
         .sort();
       for (const file of files) {
         const full = path.join(BACKUP_DIR, file);
@@ -111,6 +122,7 @@ async function main() {
     const latestFresh = latestAuto ? (Date.now() - latestAuto.mtime < STALE_MS) : false;
 
     const ok = backup.integrity === 'ok'
+      && restored.integrity === 'ok'
       && countsMatch
       && hashMatch
       && corrupt.length === 0

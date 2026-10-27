@@ -10,10 +10,17 @@ test('classifyResult distinguishes retrieval, reject, and system failures', () =
 });
 
 test('quality evaluation uses supplied local matcher and evaluates all 30 cases', async () => {
+  // 传 knowledge 桩，避免 runEvaluation 加载真实 knowledge 模块（真实库/备份）
+  const stubKnowledge = {
+    knowledgeBase: [],
+    getBestMatch: async () => null,
+  };
+
   const report = await runEvaluation({
     actor: 'test',
     persist: false,
     writeReports: false,
+    knowledge: stubKnowledge,
     getBestMatch: async () => null,
   });
   assert.equal(report.total, 30);
