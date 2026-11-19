@@ -339,13 +339,7 @@ async def _direct_chat(conv_id: str, message: str, provider: Optional[str]) -> D
         return {"type": "fallback", "answer": get_default_response.invoke({"reason": "AI不可用"})}
 
     # 知识库优先（置信门控 + 问题改写）
-    kb = _get_kb()
-    _llm_holder = {"llm": None}
-    def _get_llm():
-        if _llm_holder["llm"] is None:
-            _llm_holder["llm"] = _create_llm(provider)
-        return _llm_holder["llm"]
-    best_match = await _smart_kb_match(kb, message, _get_llm)
+    best_match = await _kb_first_match(message, provider)
     if best_match:
         _memory.add(conv_id, "assistant", best_match["answer"])
         return {
@@ -356,11 +350,7 @@ async def _direct_chat(conv_id: str, message: str, provider: Optional[str]) -> D
         }
 
     # 构建消息
-    system = SystemMessage(content=cfg["system_prompt"])
-    history = _memory.to_langchain(conv_id)
-    user_msg = HumanMessage(content=message)
-    # 【修复】history[:-1] 会丢掉刚加入的当前用户消息，必须补回 user_msg
-    messages = [system] + history[:-1] + [user_msg]
+    messages = _build_llm_messages(cfg, conv_id, message)
 
     try:
         response = llm.invoke(messages)
@@ -370,7 +360,7 @@ async def _direct_chat(conv_id: str, message: str, provider: Optional[str]) -> D
     except Exception as e:
         print(f"[AI] LLM 调用失败: {e}")
         # 尝试切换提供商（备用也失败时返回兜底，而非 500）
-        fallback = "zhipu" if provider == "deepseek" else "deepseek"
+        fallback = _fallback_provider(provider)
         try:
             llm2 = _create_llm(fallback)
             if llm2:
@@ -509,6 +499,38 @@ async def _smart_kb_match(kb, message: str, llm_factory: Callable) -> Optional[D
     best = kb.get_best_match(message)
     return best
 
+
+def _build_llm_messages(cfg: Dict, conv_id: str, message: str) -> List:
+    """构造传给 LLM 的消息列表（直答链与流式链共用）。
+
+    【修复】history[:-1] 会丢掉刚加入的当前用户消息，必须补回 user_msg
+    """
+    system = SystemMessage(content=cfg["system_prompt"])
+    history = _memory.to_langchain(conv_id)
+    user_msg = HumanMessage(content=message)
+    return [system] + history[:-1] + [user_msg]
+
+
+def _fallback_provider(provider: Optional[str]) -> str:
+    """主模型失败时切到另一家（deepseek <-> zhipu，直答链与流式链共用）"""
+    return "zhipu" if provider == "deepseek" else "deepseek"
+
+
+async def _kb_first_match(message: str, provider: Optional[str]) -> Optional[Dict]:
+    """知识库优先匹配（直答链与流式链共用），命中即返回 best_match。
+
+    保留 _llm_holder/_get_llm 惰性闭包：早期版本用它改写查询做二次检索，
+    当前 _smart_kb_match 已移除改写路径，但闭包按原样保留，避免行为漂移。
+    """
+    kb = _get_kb()
+    _llm_holder = {"llm": None}
+    def _get_llm():
+        if _llm_holder["llm"] is None:
+            _llm_holder["llm"] = _create_llm(provider)
+        return _llm_holder["llm"]
+    return await _smart_kb_match(kb, message, _get_llm)
+
+
 async def chat_stream(
     conv_id: str,
     message: str,
@@ -529,13 +551,7 @@ async def chat_stream(
     _memory.add(conv_id, "user", message)
 
     # 1. 知识库优先检查（置信门控 + 问题改写）
-    kb = _get_kb()
-    _llm_holder = {"llm": None}
-    def _get_llm():
-        if _llm_holder["llm"] is None:
-            _llm_holder["llm"] = _create_llm(provider)
-        return _llm_holder["llm"]
-    best_match = await _smart_kb_match(kb, message, _get_llm)
+    best_match = await _kb_first_match(message, provider)
     if best_match:
         _memory.add(conv_id, "assistant", best_match["answer"])
         yield json.dumps({"type": "knowledge", "content": best_match["answer"]})
@@ -547,11 +563,7 @@ async def chat_stream(
         yield json.dumps({"type": "fallback", "content": get_default_response.invoke({"reason": "AI不可用"})["answer"]})
         return
 
-    system = SystemMessage(content=cfg["system_prompt"])
-    history = _memory.to_langchain(conv_id)
-    user_msg = HumanMessage(content=message)
-    # 【修复】history[:-1] 会丢掉刚加入的当前用户消息，必须补回 user_msg
-    messages = [system] + history[:-1] + [user_msg]
+    messages = _build_llm_messages(cfg, conv_id, message)
 
     try:
         full_content = ""
@@ -565,7 +577,7 @@ async def chat_stream(
     except Exception as e:
         print(f"[流式] 失败: {e}")
         # 切换提供商兜底（备用也失败时发送 error 事件，保证前端能区分结束）
-        fallback = "zhipu" if provider == "deepseek" else "deepseek"
+        fallback = _fallback_provider(provider)
         try:
             llm2 = _create_llm(fallback)
             if llm2:
