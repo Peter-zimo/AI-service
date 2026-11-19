@@ -5,25 +5,13 @@
 
 from __future__ import annotations
 
-import json
 from typing import Optional
 
-from config import get_available_provider, get_provider_config
+from ai.llm_common import make_llm, parse_json_loose
 
 
 def _get_llm() -> Optional[object]:
-    provider = get_available_provider()
-    if not provider:
-        return None
-    cfg = get_provider_config(provider)
-    from langchain_openai import ChatOpenAI
-    return ChatOpenAI(
-        model=cfg.get("model", "deepseek-chat"),
-        api_key=cfg.get("api_key", ""),
-        base_url=cfg.get("base_url", ""),
-        temperature=0.1,
-        max_tokens=100,
-    )
+    return make_llm(temperature=0.1, max_tokens=100)
 
 
 async def extract_keywords(text: str, max_keywords: int = 8) -> list[str]:
@@ -47,12 +35,7 @@ async def extract_keywords(text: str, max_keywords: int = 8) -> list[str]:
 
     try:
         response = await llm.ainvoke(prompt)
-        content = response.content.strip()
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        keywords = json.loads(content)
+        keywords = parse_json_loose(response.content)
         if isinstance(keywords, list):
             return [str(k).strip() for k in keywords if k][:max_keywords]
         return []

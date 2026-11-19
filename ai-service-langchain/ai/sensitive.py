@@ -5,10 +5,9 @@ LLM 语义级敏感词检测
 
 from __future__ import annotations
 
-import json
 from typing import Optional
 
-from config import load_config, get_available_provider, get_provider_config
+from ai.llm_common import make_llm, parse_json_loose
 
 _LOCAL_HIGH_RISK_TERMS = ("毒品", "赌博", "诈骗", "恐吓", "炸弹", "枪支")
 
@@ -23,18 +22,7 @@ def local_sensitive_fallback(text: str) -> dict:
 
 def _get_llm() -> Optional[object]:
     """获取 LLM 实例"""
-    provider = get_available_provider()
-    if not provider:
-        return None
-    cfg = get_provider_config(provider)
-    from langchain_openai import ChatOpenAI
-    return ChatOpenAI(
-        model=cfg.get("model", "deepseek-chat"),
-        api_key=cfg.get("api_key", ""),
-        base_url=cfg.get("base_url", ""),
-        temperature=0.1,
-        max_tokens=100,
-    )
+    return make_llm(temperature=0.1, max_tokens=100)
 
 
 async def check_sensitive(text: str) -> dict:
@@ -62,13 +50,7 @@ async def check_sensitive(text: str) -> dict:
 
     try:
         response = await llm.ainvoke(prompt)
-        content = response.content.strip()
-        # 提取 JSON
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        result = json.loads(content)
+        result = parse_json_loose(response.content)
         return {
             "has_sensitive": bool(result.get("has_sensitive", False)),
             "reason": str(result.get("reason", "")),
